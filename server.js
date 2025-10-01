@@ -8,10 +8,16 @@ const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const connectDB = require('./src/config/database');
 const { initializeSendGrid } = require('./src/config/sendgrid');
 const intelligenceJob = require('./src/jobs/intelligenceJob');
+
+// Load version
+const versionFile = path.join(__dirname, 'version.json');
+const { version } = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
 
 // Import routes
 const authRoutes = require('./src/routes/auth');
@@ -95,6 +101,12 @@ app.set('layout', 'layouts/main');
 
 // Static files
 app.use(express.static('public'));
+
+// Make version available to all views
+app.use((req, res, next) => {
+  res.locals.version = version;
+  next();
+});
 
 // API Routes (no layout)
 app.use('/api/auth', authRoutes);
