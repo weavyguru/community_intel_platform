@@ -6,6 +6,15 @@ const claudeConversationSchema = new mongoose.Schema({
   answer: { type: String, required: true },
   analysisDepth: { type: String, enum: ['quick', 'standard', 'deep', 'comprehensive'] },
   sourcesAnalyzed: { type: Number, default: 0 },
+  sources: [{
+    id: String,
+    platform: String,
+    author: String,
+    content: String,
+    deeplink: String,
+    relevanceScore: Number,
+    timestamp: Date
+  }],
   filters: {
     platform: String,
     timeRange: String,
@@ -21,6 +30,12 @@ const claudeConversationSchema = new mongoose.Schema({
     outputTokens: Number,
     model: String
   },
+  log: [{
+    message: String,
+    detail: String,
+    model: String,
+    timestamp: Date
+  }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   isBookmarked: { type: Boolean, default: false }

@@ -72,6 +72,28 @@ exports.ask = async (req, res) => {
       }
     }
 
+    // Collect log entries
+    const logEntries = [];
+
+    // Emit status update and log it
+    const emitStatus = (message, detail = '', model = null) => {
+      const logEntry = {
+        message,
+        detail,
+        model,
+        timestamp: new Date()
+      };
+
+      logEntries.push(logEntry);
+
+      if (global.io) {
+        global.io.emit('analysis:status', {
+          userId: req.user._id.toString(),
+          ...logEntry
+        });
+      }
+    };
+
     // Build Chroma filters
     const chromaFilters = {};
     if (filters.platforms && filters.platforms.length > 0) chromaFilters.platforms = filters.platforms;
@@ -83,7 +105,20 @@ exports.ask = async (req, res) => {
     }
     if (filters.includeComments !== undefined) chromaFilters.includeComments = filters.includeComments;
 
+    // Build Chroma query details for display
+    const chromaQueryDisplay = {
+      query: question,
+      limit: parseInt(contextLimit),
+      filters: chromaFilters
+    };
+
     // Search for relevant context
+    emitStatus('Searching knowledge base', `Looking for ${contextLimit} relevant sources`, 'Chroma Vector DB');
+    emitStatus(
+      'Executing Chroma query',
+      `Query: "${chromaQueryDisplay.query}"\nLimit: ${chromaQueryDisplay.limit}\nFilters: ${JSON.stringify(chromaQueryDisplay.filters, null, 2)}`,
+      'Chroma Vector DB'
+    );
     console.log(`Deep analysis: Searching for ${contextLimit} results with filters`, chromaFilters);
     const chromaResults = await chromaService.searchSemantic(
       question,
@@ -91,6 +126,30 @@ exports.ask = async (req, res) => {
       chromaFilters
     );
 
+    // Summarize results
+    const platformCounts = {};
+    const dateRange = { earliest: null, latest: null };
+    chromaResults.forEach(result => {
+      const platform = result.metadata?.platform || 'unknown';
+      platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+
+      if (result.metadata?.timestamp) {
+        const date = new Date(result.metadata.timestamp);
+        if (!dateRange.earliest || date < dateRange.earliest) dateRange.earliest = date;
+        if (!dateRange.latest || date > dateRange.latest) dateRange.latest = date;
+      }
+    });
+
+    const platformSummary = Object.entries(platformCounts)
+      .map(([platform, count]) => `${count} from ${platform}`)
+      .join(', ');
+
+    let resultSummary = `Found ${chromaResults.length} relevant sources: ${platformSummary}`;
+    if (dateRange.earliest && dateRange.latest) {
+      resultSummary += `\nDate range: ${dateRange.earliest.toLocaleDateString()} to ${dateRange.latest.toLocaleDateString()}`;
+    }
+
+    emitStatus('Knowledge retrieved', resultSummary);
     console.log(`Found ${chromaResults.length} results for analysis`);
 
     // Enhance the question for better analysis
@@ -99,18 +158,37 @@ exports.ask = async (req, res) => {
       enhancedQuestion += `\n\nNote: This is a comprehensive analysis of ${chromaResults.length} community posts. Please provide a thorough, well-structured analysis covering all major themes and insights.`;
     }
 
+    // Get the model being used
+    const mainModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
+    const titleModel = 'claude-haiku-3-5-20241022';
+
     // Ask Claude with enhanced context
+    emitStatus('Analyzing with Claude AI', `Using ${chromaResults.length} sources for comprehensive analysis`, mainModel);
     const response = await claudeService.askWithContext(
       enhancedQuestion,
       chromaResults,
       instructions
     );
 
+    emitStatus('Generating title', 'Creating concise title for analysis', titleModel);
     // Generate title using Haiku 3.5
     const title = await claudeService.generateTitle(question);
 
+    emitStatus('Saving to database', 'Storing analysis and sources');
+
     // Determine analysis depth
     const analysisDepth = contextLimit > 50 ? 'comprehensive' : contextLimit > 25 ? 'deep' : contextLimit > 10 ? 'standard' : 'quick';
+
+    // Prepare sources with deeplinks
+    const sources = chromaResults.map(result => ({
+      id: result.id,
+      platform: result.metadata?.platform,
+      author: result.metadata?.author,
+      content: result.content,
+      deeplink: result.metadata?.deeplink,
+      relevanceScore: result.relevanceScore,
+      timestamp: result.metadata?.timestamp ? new Date(result.metadata.timestamp) : undefined
+    }));
 
     // Save conversation to MongoDB
     const conversation = await ClaudeConversation.create({
@@ -119,6 +197,7 @@ exports.ask = async (req, res) => {
       answer: response.answer,
       analysisDepth,
       sourcesAnalyzed: chromaResults.length,
+      sources,
       filters: {
         platform: filters.platform,
         startDate: filters.startDate ? new Date(filters.startDate) : undefined,
@@ -131,12 +210,15 @@ exports.ask = async (req, res) => {
       usage: {
         inputTokens: response.usage?.input_tokens,
         outputTokens: response.usage?.output_tokens,
-        model: 'claude-sonnet-4-5-20250929'
+        model: mainModel
       },
+      log: logEntries,
       createdBy: req.user._id
     });
 
     console.log(`Saved conversation: ${conversation._id} - "${title}"`);
+
+    emitStatus('Analysis complete', `"${title}" saved successfully`);
 
     res.json({
       success: true,

@@ -98,6 +98,7 @@ app.use(expressLayouts);
 app.set('view engine', 'ejs');
 app.set('views', __dirname + '/src/views');
 app.set('layout', 'layouts/main');
+app.set('view cache', false); // Disable view caching for development
 
 // Static files
 app.use(express.static('public'));
@@ -239,9 +240,9 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
@@ -249,6 +250,26 @@ app.listen(PORT, () => {
   intelligenceJob.start();
   console.log('Intelligence job started');
 });
+
+// Initialize Socket.IO
+const { Server } = require('socket.io');
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
+
+// Make io available globally
+global.io = io;
 
 // Graceful shutdown
 process.on('SIGINT', () => {
