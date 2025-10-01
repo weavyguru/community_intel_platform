@@ -7,7 +7,12 @@
 
   <!-- Search Section -->
   <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-xl font-semibold mb-4">Semantic Search</h2>
+    <div class="flex items-center gap-2 mb-4">
+      <h2 class="text-xl font-semibold">Semantic Search</h2>
+      <sl-tooltip id="searchParamsTooltip" content="No search yet" placement="right">
+        <sl-icon name="info-circle" class="text-gray-400 cursor-help"></sl-icon>
+      </sl-tooltip>
+    </div>
     <form id="searchForm" class="space-y-4">
       <div>
         <sl-input
@@ -73,7 +78,12 @@
 
   <!-- Ask Section -->
   <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-xl font-semibold mb-4">Ask Claude - Deep Community Analysis</h2>
+    <div class="flex items-center gap-2 mb-4">
+      <h2 class="text-xl font-semibold">Ask Claude - Deep Community Analysis</h2>
+      <sl-tooltip id="askParamsTooltip" content="No analysis yet" placement="right">
+        <sl-icon name="info-circle" class="text-gray-400 cursor-help"></sl-icon>
+      </sl-tooltip>
+    </div>
     <p class="text-sm text-gray-600 mb-4">Ask questions about community feedback and get AI-powered insights with configurable depth</p>
 
     <form id="askForm" class="space-y-4">
@@ -287,6 +297,29 @@
     const resultsDiv = document.getElementById('searchResults');
     resultsDiv.innerHTML = '<sl-spinner></sl-spinner> Searching...';
 
+    // Build filter object for tooltip
+    const filters = {
+      platforms: platforms.length > 0 ? platforms : undefined,
+      includeComments
+    };
+
+    // Build Chroma where clause visualization
+    let whereClause = {};
+    if (filters.platforms && filters.platforms.length > 0) {
+      whereClause.platform = { $in: filters.platforms.map(p => p.toLowerCase()) };
+    }
+    if (filters.includeComments === false) {
+      whereClause.is_comment = { $eq: false };
+    } else if (filters.includeComments === true) {
+      whereClause.is_comment = { $eq: true };
+    }
+
+    const tooltipContent = `Query: "${query.toLowerCase()}"
+Limit: ${limit}
+Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null, 2) : 'none'}`;
+
+    document.getElementById('searchParamsTooltip').content = tooltipContent;
+
     try {
       const response = await fetch('/api/search', {
         method: 'POST',
@@ -295,10 +328,7 @@
         body: JSON.stringify({
           query,
           limit,
-          filters: {
-            platforms: platforms.length > 0 ? platforms : undefined,
-            includeComments
-          }
+          filters
         })
       });
 
@@ -404,6 +434,17 @@
       // Add type filter
       requestBody.filters.includeComments = includeComments;
 
+      // Build Chroma where clause visualization
+      let whereClause = {};
+      if (requestBody.filters.platforms && requestBody.filters.platforms.length > 0) {
+        whereClause.platform = { $in: requestBody.filters.platforms.map(p => p.toLowerCase()) };
+      }
+      if (requestBody.filters.includeComments === false) {
+        whereClause.is_comment = { $eq: false };
+      } else if (requestBody.filters.includeComments === true) {
+        whereClause.is_comment = { $eq: true };
+      }
+
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -412,6 +453,16 @@
       });
 
       const data = await response.json();
+
+      // Update tooltip with actual query params after response
+      const tooltipContent = `Query: "${question.toLowerCase()}"
+Limit: ${contextLimit}
+Time Filter: ${timeRange === 'all' ? 'none' : `startDate >= ${requestBody.filters.startDate}`}
+Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null, 2) : 'none'}
+Patterns: ${includePatterns}
+Trends: ${includeTrends}`;
+
+      document.getElementById('askParamsTooltip').content = tooltipContent;
 
       if (data.success) {
         // Render Markdown to HTML
