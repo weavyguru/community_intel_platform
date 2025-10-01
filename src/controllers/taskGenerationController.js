@@ -19,25 +19,40 @@ exports.generateTasks = async (req, res) => {
     // Get task generation agent config
     const config = await AgentConfig.findOne({ type: 'create-tasks' });
     if (!config) {
+      console.error('Task generation agent not configured');
       return res.status(500).json({ error: 'Task generation agent not configured' });
     }
 
-    // Filter sources by relevance (only analyze high-relevance sources)
-    const relevanceThreshold = 0.7;
-    const highRelevanceSources = conversation.sources.filter(
-      source => source.relevanceScore >= relevanceThreshold
-    );
+    console.log(`Task generation started for conversation ${conversationId}`);
+    console.log(`Total sources in conversation: ${conversation.sources?.length || 0}`);
 
-    if (highRelevanceSources.length === 0) {
+    // Note: Sources are already pre-filtered by the initial Claude analysis
+    // User selected how many sources to analyze (10-100), so they're all relevant
+    // We'll analyze all of them to maximize task discovery
+    if (!conversation.sources || conversation.sources.length === 0) {
       return res.json({
         success: true,
-        message: 'No high-relevance sources found for task generation',
+        message: 'No sources found for task generation',
         suggestedTasks: []
       });
     }
 
-    // Limit to max 15 sources to avoid overwhelming
-    const sourcesToAnalyze = highRelevanceSources.slice(0, 15);
+    // Deduplicate sources by deeplink to avoid analyzing the same post multiple times
+    const seenDeeplinks = new Set();
+    const uniqueSources = conversation.sources.filter(source => {
+      if (!source.deeplink) return true; // Keep sources without deeplinks
+
+      if (seenDeeplinks.has(source.deeplink)) {
+        return false; // Skip duplicate
+      }
+
+      seenDeeplinks.add(source.deeplink);
+      return true;
+    });
+
+    console.log(`Total sources: ${conversation.sources.length}, Unique sources after deduplication: ${uniqueSources.length}`);
+
+    const sourcesToAnalyze = uniqueSources;
 
     const suggestedTasks = [];
     let processedCount = 0;
@@ -161,19 +176,33 @@ exports.createTaskFromSuggestion = async (req, res) => {
       return res.status(404).json({ error: 'Suggested task not found' });
     }
 
+    // Map platform names to match Task model enum
+    const platformMap = {
+      'lovable': 'Discord',
+      'v0': 'Discord',
+      'discord': 'Discord',
+      'reddit': 'Reddit',
+      'x': 'X',
+      'twitter': 'X',
+      'linkedin': 'LinkedIn'
+    };
+
+    const mappedPlatform = platformMap[suggestedTask.platform?.toLowerCase()] || 'Discord';
+
     // Create the actual task
     const task = await Task.create({
       title: title || `${suggestedTask.platform} - ${suggestedTask.author}`,
-      description: description || suggestedTask.suggestedResponse,
-      platform: suggestedTask.platform,
-      deeplink: suggestedTask.sourceDeeplink,
+      snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
+      sourceUrl: suggestedTask.sourceDeeplink || '#',
+      platform: mappedPlatform,
       intent: 'engagement',
       priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
-      assignedTo: req.user._id,
       metadata: {
-        sourceContent: suggestedTask.sourceContent,
+        author: suggestedTask.author,
+        suggestedResponse: suggestedTask.suggestedResponse,
         reasoning: suggestedTask.reasoning,
-        conversationId: conversation._id
+        conversationId: conversation._id,
+        originalPlatform: suggestedTask.platform
       }
     });
 
