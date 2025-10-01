@@ -29,7 +29,7 @@ class ChromaService {
       const queryLimit = (filters.startDate || filters.endDate) ? limit * 3 : limit;
 
       const results = await this.collection.query({
-        queryTexts: [query],
+        queryTexts: [query.toLowerCase()],
         nResults: queryLimit,
         where: Object.keys(where).length > 0 ? where : undefined
       });
