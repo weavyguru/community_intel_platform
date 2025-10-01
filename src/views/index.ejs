@@ -18,46 +18,51 @@
         ></sl-input>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
-          <div class="border rounded p-3 bg-gray-50 max-h-48 overflow-y-auto space-y-2">
-            <sl-checkbox value="Lovable" checked>Lovable</sl-checkbox>
-            <sl-checkbox value="Replit" checked>Replit</sl-checkbox>
-            <sl-checkbox value="v0" checked>v0</sl-checkbox>
-            <sl-checkbox value="Bolt" checked>Bolt</sl-checkbox>
-            <sl-checkbox value="Floot" checked>Floot</sl-checkbox>
-            <sl-checkbox value="Orchids" checked>Orchids</sl-checkbox>
-            <sl-checkbox value="Base44" checked>Base44</sl-checkbox>
-            <sl-checkbox value="Retool" checked>Retool</sl-checkbox>
-            <sl-checkbox value="Refine" checked>Refine</sl-checkbox>
-            <sl-checkbox value="Appsmith" checked>Appsmith</sl-checkbox>
-            <sl-checkbox value="Vibe coder" checked>Vibe coder</sl-checkbox>
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
-          <div class="border rounded p-3 bg-gray-50 space-y-2">
-            <sl-checkbox value="post" checked>Post</sl-checkbox>
-            <sl-checkbox value="comment">Comments</sl-checkbox>
-          </div>
-
-          <label class="block text-sm font-medium text-gray-700 mt-4 mb-2">Results</label>
-          <sl-select id="limitSelect" value="10">
-            <sl-option value="5">5 results</sl-option>
-            <sl-option value="10">10 results</sl-option>
-            <sl-option value="20">20 results</sl-option>
-            <sl-option value="50">50 results</sl-option>
-          </sl-select>
-        </div>
-
-        <div class="flex items-end">
-          <sl-button type="submit" variant="primary" size="large" class="w-full">
-            <sl-icon slot="prefix" name="search"></sl-icon>
-            Search
+      <div class="flex gap-4">
+        <sl-dropdown id="searchFiltersDropdown" hoist>
+          <sl-button slot="trigger" caret>
+            <sl-icon slot="prefix" name="funnel"></sl-icon>
+            Filters
           </sl-button>
-        </div>
+          <div class="p-4" style="min-width: 300px;">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                <sl-checkbox class="search-platform" value="Lovable" checked>Lovable</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Replit" checked>Replit</sl-checkbox>
+                <sl-checkbox class="search-platform" value="v0" checked>v0</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Bolt" checked>Bolt</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Floot" checked>Floot</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Orchids" checked>Orchids</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Base44" checked>Base44</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Retool" checked>Retool</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Refine" checked>Refine</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Appsmith" checked>Appsmith</sl-checkbox>
+                <sl-checkbox class="search-platform" value="Vibe coder" checked>Vibe coder</sl-checkbox>
+              </div>
+            </div>
+            <sl-divider></sl-divider>
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
+              <div class="space-y-2">
+                <sl-checkbox class="search-type" value="post" checked>Post</sl-checkbox>
+                <sl-checkbox class="search-type" value="comment">Comments</sl-checkbox>
+              </div>
+            </div>
+          </div>
+        </sl-dropdown>
+
+        <sl-select id="limitSelect" value="10">
+          <sl-option value="5">5 results</sl-option>
+          <sl-option value="10">10 results</sl-option>
+          <sl-option value="20">20 results</sl-option>
+          <sl-option value="50">50 results</sl-option>
+        </sl-select>
+
+        <sl-button type="submit" variant="primary" size="large">
+          <sl-icon slot="prefix" name="search"></sl-icon>
+          Search
+        </sl-button>
       </div>
     </form>
 
@@ -80,59 +85,58 @@
         ></sl-textarea>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
-          <div class="border rounded p-3 bg-gray-50 max-h-48 overflow-y-auto space-y-2">
-            <sl-checkbox class="ask-platform" value="Lovable" checked>Lovable</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Replit" checked>Replit</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="v0" checked>v0</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Bolt" checked>Bolt</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Floot" checked>Floot</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Orchids" checked>Orchids</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Base44" checked>Base44</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Retool" checked>Retool</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Refine" checked>Refine</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Appsmith" checked>Appsmith</sl-checkbox>
-            <sl-checkbox class="ask-platform" value="Vibe coder" checked>Vibe coder</sl-checkbox>
+      <div class="flex gap-4 flex-wrap">
+        <sl-dropdown id="askFiltersDropdown" hoist>
+          <sl-button slot="trigger" caret>
+            <sl-icon slot="prefix" name="funnel"></sl-icon>
+            Filters
+          </sl-button>
+          <div class="p-4" style="min-width: 300px;">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                <sl-checkbox class="ask-platform" value="Lovable" checked>Lovable</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Replit" checked>Replit</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="v0" checked>v0</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Bolt" checked>Bolt</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Floot" checked>Floot</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Orchids" checked>Orchids</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Base44" checked>Base44</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Retool" checked>Retool</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Refine" checked>Refine</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Appsmith" checked>Appsmith</sl-checkbox>
+                <sl-checkbox class="ask-platform" value="Vibe coder" checked>Vibe coder</sl-checkbox>
+              </div>
+            </div>
+            <sl-divider></sl-divider>
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
+              <div class="space-y-2">
+                <sl-checkbox class="ask-type" value="post" checked>Post</sl-checkbox>
+                <sl-checkbox class="ask-type" value="comment">Comments</sl-checkbox>
+              </div>
+            </div>
           </div>
-        </div>
+        </sl-dropdown>
 
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
-          <div class="border rounded p-3 bg-gray-50 space-y-2">
-            <sl-checkbox class="ask-type" value="post" checked>Post</sl-checkbox>
-            <sl-checkbox class="ask-type" value="comment">Comments</sl-checkbox>
-          </div>
-        </div>
+        <sl-select id="analysisDepth" value="standard">
+          <sl-option value="quick">Quick (10 results)</sl-option>
+          <sl-option value="standard">Standard (25 results)</sl-option>
+          <sl-option value="deep">Deep (50 results)</sl-option>
+          <sl-option value="comprehensive">Comprehensive (100 results)</sl-option>
+        </sl-select>
 
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Depth</label>
-          <sl-select id="analysisDepth" value="standard">
-            <sl-option value="quick">Quick (10 results)</sl-option>
-            <sl-option value="standard">Standard (25 results)</sl-option>
-            <sl-option value="deep">Deep (50 results)</sl-option>
-            <sl-option value="comprehensive">Comprehensive (100 results)</sl-option>
-          </sl-select>
+        <sl-select id="timeRange" value="all">
+          <sl-option value="7">Last 7 days</sl-option>
+          <sl-option value="30">Last 30 days</sl-option>
+          <sl-option value="90">Last 90 days</sl-option>
+          <sl-option value="180">Last 6 months</sl-option>
+          <sl-option value="365">Last year</sl-option>
+          <sl-option value="all">All time</sl-option>
+        </sl-select>
 
-          <label class="block text-sm font-medium text-gray-700 mt-4 mb-2">Time Range</label>
-          <sl-select id="timeRange" value="all">
-            <sl-option value="7">Last 7 days</sl-option>
-            <sl-option value="30">Last 30 days</sl-option>
-            <sl-option value="90">Last 90 days</sl-option>
-            <sl-option value="180">Last 6 months</sl-option>
-            <sl-option value="365">Last year</sl-option>
-            <sl-option value="all">All time</sl-option>
-          </sl-select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Options</label>
-          <div class="border rounded p-3 bg-gray-50 space-y-2">
-            <sl-checkbox id="includePatterns">Identify Patterns</sl-checkbox>
-            <sl-checkbox id="includeTrends">Analyze Trends</sl-checkbox>
-          </div>
-        </div>
+        <sl-checkbox id="includePatterns">Identify Patterns</sl-checkbox>
+        <sl-checkbox id="includeTrends">Analyze Trends</sl-checkbox>
       </div>
 
       <div class="flex items-center gap-4 flex-wrap">
@@ -254,13 +258,13 @@
     const limit = document.getElementById('limitSelect').value;
 
     // Get checked platforms
-    const platformCheckboxes = document.querySelectorAll('#searchForm sl-checkbox[value]:not(.ask-platform):not(.ask-type)');
+    const platformCheckboxes = document.querySelectorAll('.search-platform');
     const platforms = Array.from(platformCheckboxes)
       .filter(cb => cb.checked)
       .map(cb => cb.value);
 
     // Get checked types
-    const typeCheckboxes = document.querySelectorAll('#searchForm sl-checkbox[value="post"], #searchForm sl-checkbox[value="comment"]');
+    const typeCheckboxes = document.querySelectorAll('.search-type');
     const includeComments = Array.from(typeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
 
     if (!query) {
