@@ -14,7 +14,8 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(gh repo create:*)",
-      "Bash(git remote remove:*)"
+      "Bash(git remote remove:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []

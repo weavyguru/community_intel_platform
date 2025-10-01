@@ -29,8 +29,7 @@
         <% if (typeof user !== 'undefined') { %>
           <div class="flex items-center space-x-4">
             <span class="text-sm text-gray-700"><%= user.name %></span>
-            <a href="/profile" class="text-sm text-gray-500 hover:text-gray-700">Profile</a>
-            <button id="logoutBtn" class="text-sm text-red-600 hover:text-red-700">Logout</button>
+            <sl-button id="logoutBtn" variant="danger" outline size="small">Logout</sl-button>
           </div>
         <% } else { %>
           <a href="/login" class="text-sm text-indigo-600 hover:text-indigo-700">Login</a>
