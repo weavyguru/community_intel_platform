@@ -260,7 +260,7 @@
     <div slot="label" id="drawerLabel" class="flex items-center gap-2">
       <span id="drawerTitle">Claude Analysis</span>
       <sl-badge id="drawerBadge" variant="neutral" pill style="display: none;">0 sources</sl-badge>
-      <sl-button id="generateTasksBtn" size="small" variant="primary" style="display: none; margin-left: auto;" onclick="generateTasks()">
+      <sl-button id="generateTasksBtn" size="small" variant="primary" style="display: none; margin-left: auto;">
         <sl-icon slot="prefix" name="list-task"></sl-icon>
         Generate Tasks
       </sl-button>
@@ -864,6 +864,29 @@ Trends: ${includeTrends}`;
     } else {
       console.error('History dropdown element not found on page load');
     }
+
+    // Add event listener for Generate Tasks button
+    const generateTasksBtn = document.getElementById('generateTasksBtn');
+    if (generateTasksBtn) {
+      generateTasksBtn.addEventListener('click', generateTasks);
+    }
+
+    // Add event delegation for task action buttons
+    const taskSuggestionsList = document.getElementById('taskSuggestionsList');
+    if (taskSuggestionsList) {
+      taskSuggestionsList.addEventListener('click', (e) => {
+        const createBtn = e.target.closest('.create-task-btn');
+        const skipBtn = e.target.closest('.skip-task-btn');
+
+        if (createBtn) {
+          const taskIndex = parseInt(createBtn.getAttribute('data-task-index'));
+          createTaskFromSuggestion(taskIndex);
+        } else if (skipBtn) {
+          const taskIndex = parseInt(skipBtn.getAttribute('data-task-index'));
+          skipTask(taskIndex);
+        }
+      });
+    }
   });
 
   // ============= TASK GENERATION FUNCTIONS =============
@@ -931,7 +954,7 @@ Trends: ${includeTrends}`;
         ` : ''}
         <div class="mt-3 flex gap-2">
           ${task.status === 'pending' && task.shouldEngage ? `
-            <sl-button size="small" variant="primary" onclick="createTaskFromSuggestion(${index})">
+            <sl-button size="small" variant="primary" class="create-task-btn" data-task-index="${index}">
               <sl-icon slot="prefix" name="plus"></sl-icon>
               Create Task
             </sl-button>
@@ -939,7 +962,7 @@ Trends: ${includeTrends}`;
             <sl-badge variant="success">✓ Task Created</sl-badge>
           ` : ''}
           ${task.status === 'pending' ? `
-            <sl-button size="small" variant="default" onclick="skipTask(${index})">
+            <sl-button size="small" variant="default" class="skip-task-btn" data-task-index="${index}">
               Skip
             </sl-button>
           ` : task.status === 'rejected' ? `
