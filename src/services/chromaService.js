@@ -172,9 +172,9 @@ class ChromaService {
   _buildWhereClause(filters) {
     const where = {};
 
-    // Handle platforms array with $in operator
+    // Handle platforms array with $in operator (lowercase for case-insensitive matching)
     if (filters.platforms && filters.platforms.length > 0) {
-      where.platform = { $in: filters.platforms };
+      where.platform = { $in: filters.platforms.map(p => p.toLowerCase()) };
     }
 
     if (filters.author) {
