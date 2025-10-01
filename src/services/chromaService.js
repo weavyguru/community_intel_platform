@@ -190,8 +190,10 @@ class ChromaService {
       // Only posts (is_comment = false)
       where.is_comment = { $eq: false };
     } else if (filters.includeComments === true) {
-      // Both posts and comments - no filter needed
+      // Only comments (is_comment = true)
+      where.is_comment = { $eq: true };
     }
+    // If undefined, no filter - want everything
 
     // Note: Time-based filtering is done post-query in the results
     // because Chroma's where clause may not support complex timestamp queries

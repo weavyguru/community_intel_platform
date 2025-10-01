@@ -273,7 +273,11 @@
 
     // Get checked types
     const typeCheckboxes = document.querySelectorAll('.search-type');
-    const includeComments = Array.from(typeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
+    const postChecked = Array.from(typeCheckboxes).find(cb => cb.value === 'post')?.checked || false;
+    const commentChecked = Array.from(typeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
+
+    // If both or neither are checked, don't filter (want everything)
+    const includeComments = (postChecked && commentChecked) ? undefined : commentChecked;
 
     if (!query) {
       alert('Please enter a search query');
@@ -351,7 +355,11 @@
 
     // Get checked types
     const askTypeCheckboxes = document.querySelectorAll('.ask-type');
-    const includeComments = Array.from(askTypeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
+    const postChecked = Array.from(askTypeCheckboxes).find(cb => cb.value === 'post')?.checked || false;
+    const commentChecked = Array.from(askTypeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
+
+    // If both or neither are checked, don't filter (want everything)
+    const includeComments = (postChecked && commentChecked) ? undefined : commentChecked;
 
     // Map depth to result count
     const depthMap = {
