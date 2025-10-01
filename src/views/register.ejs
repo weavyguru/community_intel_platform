@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - Community Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+      <div>
+        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Create your account
+        </h2>
+        <p class="mt-2 text-center text-sm text-gray-600">
+          Only @weavy.com email addresses are allowed
+        </p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-8">
+        <form id="registerForm" class="space-y-6">
+          <div>
+            <sl-input
+              id="name"
+              placeholder="Full Name"
+              required
+            ></sl-input>
+          </div>
+
+          <div>
+            <sl-input
+              id="email"
+              type="email"
+              placeholder="Email (@weavy.com)"
+              required
+              help-text="Must be a @weavy.com email address"
+            ></sl-input>
+          </div>
+
+          <div>
+            <sl-input
+              id="password"
+              type="password"
+              placeholder="Password"
+              required
+              password-toggle
+              help-text="Minimum 6 characters"
+            ></sl-input>
+          </div>
+
+          <div>
+            <sl-input
+              id="confirmPassword"
+              type="password"
+              placeholder="Confirm Password"
+              required
+              password-toggle
+            ></sl-input>
+          </div>
+
+          <sl-button type="submit" variant="primary" size="large" class="w-full">
+            Register
+          </sl-button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-sm text-gray-600">
+            Already have an account?
+            <a href="/login" class="font-medium text-indigo-600 hover:text-indigo-500">
+              Sign in
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+
+      if (!email.endsWith('@weavy.com')) {
+        alert('Only @weavy.com email addresses are allowed');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        alert('Passwords do not match');
+        return;
+      }
+
+      if (password.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Registration successful! Please check your email to verify your account.');
+          window.location.href = '/login';
+        } else {
+          alert(data.error || 'Registration failed');
+        }
+      } catch (error) {
+        console.error('Registration error:', error);
+        alert('An error occurred during registration');
+      }
+    });
+  </script>
+</body>
+</html>

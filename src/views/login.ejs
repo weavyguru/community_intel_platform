@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Community Intelligence Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+      <div>
+        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          Weavy Community Intelligence
+        </h2>
+        <p class="mt-2 text-center text-sm text-gray-600">
+          Sign in to your account
+        </p>
+      </div>
+
+      <div class="bg-white rounded-lg shadow p-8">
+        <form id="loginForm" class="space-y-6">
+          <div>
+            <sl-input
+              id="email"
+              type="email"
+              placeholder="Email (@weavy.com)"
+              required
+            ></sl-input>
+          </div>
+
+          <div>
+            <sl-input
+              id="password"
+              type="password"
+              placeholder="Password"
+              required
+              password-toggle
+            ></sl-input>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <a href="/forgot-password" class="text-sm text-indigo-600 hover:text-indigo-500">
+              Forgot password?
+            </a>
+          </div>
+
+          <sl-button type="submit" variant="primary" size="large" class="w-full">
+            Sign in
+          </sl-button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-sm text-gray-600">
+            Don't have an account?
+            <a href="/register" class="font-medium text-indigo-600 hover:text-indigo-500">
+              Register
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          window.location.href = '/';
+        } else {
+          alert(data.error || 'Login failed');
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        alert('An error occurred during login');
+      }
+    });
+  </script>
+</body>
+</html>

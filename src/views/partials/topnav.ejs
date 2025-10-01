@@ -1,0 +1,40 @@
+<nav class="bg-white shadow-sm border-b border-gray-200">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-16">
+      <div class="flex">
+        <div class="flex-shrink-0 flex items-center">
+          <a href="/" class="text-xl font-bold text-indigo-600">
+            Weavy Intelligence
+          </a>
+        </div>
+        <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+          <a href="/" class="<%= typeof activePage !== 'undefined' && activePage === 'home' ? 'border-indigo-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            Search & Ask
+          </a>
+          <a href="/tasks" class="<%= typeof activePage !== 'undefined' && activePage === 'tasks' ? 'border-indigo-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+            Tasks
+            <% if (typeof taskCount !== 'undefined' && taskCount > 0) { %>
+              <span class="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5"><%= taskCount %></span>
+            <% } %>
+          </a>
+          <% if (typeof user !== 'undefined' && user.role === 'admin') { %>
+            <a href="/admin" class="<%= typeof activePage !== 'undefined' && activePage === 'admin' ? 'border-indigo-500 text-gray-900' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700' %> inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+              Admin
+            </a>
+          <% } %>
+        </div>
+      </div>
+      <div class="hidden sm:ml-6 sm:flex sm:items-center">
+        <% if (typeof user !== 'undefined') { %>
+          <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-700"><%= user.name %></span>
+            <a href="/profile" class="text-sm text-gray-500 hover:text-gray-700">Profile</a>
+            <button id="logoutBtn" class="text-sm text-red-600 hover:text-red-700">Logout</button>
+          </div>
+        <% } else { %>
+          <a href="/login" class="text-sm text-indigo-600 hover:text-indigo-700">Login</a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</nav>

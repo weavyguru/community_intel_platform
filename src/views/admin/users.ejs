@@ -1,0 +1,135 @@
+<div class="space-y-6">
+  <!-- Admin Navigation -->
+  <div class="bg-white rounded-lg shadow">
+    <nav class="flex space-x-4 p-4">
+      <a href="/admin/users" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700">
+        Users
+      </a>
+      <a href="/admin/ask-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Ask Agent
+      </a>
+      <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Background Agent
+      </a>
+    </nav>
+  </div>
+
+  <div>
+    <h1 class="text-3xl font-bold text-gray-900">User Management</h1>
+    <p class="mt-2 text-gray-600">Manage user accounts and roles</p>
+  </div>
+
+  <div id="usersList">
+    <div class="text-center py-8">
+      <sl-spinner></sl-spinner>
+      <p class="mt-2 text-gray-500">Loading users...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function loadUsers() {
+    const usersList = document.getElementById('usersList');
+
+    try {
+      const response = await fetch('/api/admin/users');
+      const data = await response.json();
+
+      if (data.success) {
+        renderUsers(data.users);
+      } else {
+        usersList.innerHTML = '<p class="text-red-600 text-center">Error loading users</p>';
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      usersList.innerHTML = '<p class="text-red-600 text-center">Error loading users</p>';
+    }
+  }
+
+  function renderUsers(users) {
+    const usersList = document.getElementById('usersList');
+
+    usersList.innerHTML = `
+      <div class="bg-white rounded-lg shadow overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            ${users.map(user => `
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm font-medium text-gray-900">${user.name}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-500">${user.email}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}">
+                    ${user.role}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                    ${user.isVerified ? 'Verified' : 'Pending'}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  ${user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <sl-dropdown>
+                    <sl-button slot="trigger" size="small" caret>Actions</sl-button>
+                    <sl-menu>
+                      <sl-menu-item onclick="changeUserRole('${user._id}', 'admin')" ${user.role === 'admin' ? 'disabled' : ''}>
+                        Make Admin
+                      </sl-menu-item>
+                      <sl-menu-item onclick="changeUserRole('${user._id}', 'user')" ${user.role === 'user' ? 'disabled' : ''}>
+                        Make User
+                      </sl-menu-item>
+                    </sl-menu>
+                  </sl-dropdown>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  async function changeUserRole(userId, newRole) {
+    if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('User role updated successfully');
+        loadUsers();
+      } else {
+        alert(data.error || 'Error updating user role');
+      }
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      alert('Error updating user role');
+    }
+  }
+
+  loadUsers();
+</script>

@@ -1,0 +1,154 @@
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Tasks</h1>
+      <p class="mt-2 text-gray-600">Actionable items from community intelligence</p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white rounded-lg shadow p-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <sl-select id="statusFilter" placeholder="All Status" value="">
+        <sl-option value="">All Status</sl-option>
+        <sl-option value="false">Open</sl-option>
+        <sl-option value="true">Completed</sl-option>
+      </sl-select>
+
+      <sl-select id="priorityFilter" placeholder="All Priorities" value="">
+        <sl-option value="">All Priorities</sl-option>
+        <sl-option value="high">High</sl-option>
+        <sl-option value="medium">Medium</sl-option>
+        <sl-option value="low">Low</sl-option>
+      </sl-select>
+
+      <sl-select id="platformFilter" placeholder="All Platforms" value="">
+        <sl-option value="">All Platforms</sl-option>
+        <sl-option value="Discord">Discord</sl-option>
+        <sl-option value="Reddit">Reddit</sl-option>
+        <sl-option value="X">X (Twitter)</sl-option>
+        <sl-option value="LinkedIn">LinkedIn</sl-option>
+      </sl-select>
+
+      <sl-button onclick="loadTasks()" variant="primary" class="w-full">
+        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+        Refresh
+      </sl-button>
+    </div>
+  </div>
+
+  <!-- Tasks List -->
+  <div id="tasksList">
+    <div class="text-center py-8">
+      <sl-spinner></sl-spinner>
+      <p class="mt-2 text-gray-500">Loading tasks...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentTasks = [];
+
+  async function loadTasks() {
+    const status = document.getElementById('statusFilter').value;
+    const priority = document.getElementById('priorityFilter').value;
+    const platform = document.getElementById('platformFilter').value;
+
+    const params = new URLSearchParams();
+    if (status) params.append('completed', status);
+    if (priority) params.append('priority', priority);
+    if (platform) params.append('platform', platform);
+
+    const tasksList = document.getElementById('tasksList');
+    tasksList.innerHTML = '<div class="text-center py-8"><sl-spinner></sl-spinner></div>';
+
+    try {
+      const response = await fetch(`/api/tasks?${params.toString()}`);
+      const data = await response.json();
+
+      if (data.success) {
+        currentTasks = data.tasks;
+        renderTasks(data.tasks);
+      } else {
+        tasksList.innerHTML = '<p class="text-red-600 text-center">Error loading tasks</p>';
+      }
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+      tasksList.innerHTML = '<p class="text-red-600 text-center">Error loading tasks</p>';
+    }
+  }
+
+  function renderTasks(tasks) {
+    const tasksList = document.getElementById('tasksList');
+
+    if (tasks.length === 0) {
+      tasksList.innerHTML = '<div class="bg-white rounded-lg shadow p-8 text-center"><p class="text-gray-500">No tasks found</p></div>';
+      return;
+    }
+
+    tasksList.innerHTML = tasks.map(task => `
+      <div class="bg-white rounded-lg shadow p-6 mb-4">
+        <div class="flex items-start justify-between">
+          <div class="flex items-start space-x-4 flex-1">
+            <sl-checkbox ${task.isCompleted ? 'checked' : ''} onchange="toggleTaskComplete('${task._id}', this.checked)"></sl-checkbox>
+            <div class="flex-1">
+              <h3 class="text-lg font-semibold ${task.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}">${task.title}</h3>
+              <p class="text-sm text-gray-600 mt-1">${task.snippet}</p>
+
+              <div class="flex flex-wrap gap-2 mt-3">
+                <span class="inline-block px-2 py-1 text-xs rounded ${getPriorityClass(task.priority)}">
+                  ${task.priority.toUpperCase()}
+                </span>
+                ${task.platform ? `<span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${task.platform}</span>` : ''}
+                ${task.intent ? `<span class="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">${task.intent}</span>` : ''}
+                ${task.foundByAgent ? `<span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">AI Found</span>` : ''}
+              </div>
+
+              ${task.metadata?.author ? `<p class="text-xs text-gray-500 mt-2">Author: ${task.metadata.author}</p>` : ''}
+              ${task.isCompleted && task.completedBy ? `<p class="text-xs text-gray-500 mt-1">Completed by ${task.completedBy.name} on ${new Date(task.completedAt).toLocaleDateString()}</p>` : ''}
+
+              <a href="${task.sourceUrl}" target="_blank" class="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-700">
+                View Source →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function getPriorityClass(priority) {
+    switch(priority) {
+      case 'high': return 'bg-red-100 text-red-800';
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'low': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  }
+
+  async function toggleTaskComplete(taskId, completed) {
+    try {
+      const endpoint = completed ? `/api/tasks/${taskId}/complete` : `/api/tasks/${taskId}/reopen`;
+      const response = await fetch(endpoint, { method: 'PUT' });
+      const data = await response.json();
+
+      if (data.success) {
+        await loadTasks(); // Reload tasks
+      } else {
+        alert('Error updating task');
+      }
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      alert('Error updating task');
+    }
+  }
+
+  // Event listeners for filters
+  document.getElementById('statusFilter').addEventListener('sl-change', loadTasks);
+  document.getElementById('priorityFilter').addEventListener('sl-change', loadTasks);
+  document.getElementById('platformFilter').addEventListener('sl-change', loadTasks);
+
+  // Load tasks on page load
+  loadTasks();
+</script>

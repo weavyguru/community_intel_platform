@@ -1,0 +1,248 @@
+<div class="space-y-6">
+  <!-- Admin Navigation -->
+  <div class="bg-white rounded-lg shadow">
+    <nav class="flex space-x-4 p-4">
+      <a href="/admin/users" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Users
+      </a>
+      <a href="/admin/ask-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Ask Agent
+      </a>
+      <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700">
+        Background Agent
+      </a>
+    </nav>
+  </div>
+
+  <div class="flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Background Agent Configuration</h1>
+      <p class="mt-2 text-gray-600">Configure the hourly intelligence monitoring agent</p>
+    </div>
+    <div class="flex gap-2">
+      <sl-button onclick="runAgentNow()" variant="default">
+        <sl-icon slot="prefix" name="play-circle"></sl-icon>
+        Run Now
+      </sl-button>
+      <sl-button onclick="loadVersionHistory()" variant="default">
+        <sl-icon slot="prefix" name="clock-history"></sl-icon>
+        Version History
+      </sl-button>
+      <sl-button id="saveButton" onclick="saveConfig()" variant="primary">
+        <sl-icon slot="prefix" name="save"></sl-icon>
+        Save Changes
+      </sl-button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-6">
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Current Version: <span id="currentVersion" class="text-indigo-600">-</span>
+      </label>
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Last Updated: <span id="lastUpdated" class="text-gray-600">-</span>
+      </label>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Agent Instructions (Markdown)</label>
+      <div id="editor" style="height: 500px; border: 1px solid #e5e7eb;"></div>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Change Notes (Optional)</label>
+      <sl-textarea id="changeNotes" placeholder="Describe what changed in this version..." rows="2"></sl-textarea>
+    </div>
+
+    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+      <h3 class="text-sm font-semibold text-gray-700 mb-2">Preview</h3>
+      <div id="preview" class="prose prose-sm max-w-none bg-white p-4 rounded border border-gray-200"></div>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="border-t pt-6">
+      <h3 class="text-lg font-semibold mb-4">Notification Settings</h3>
+
+      <div class="space-y-4">
+        <div>
+          <sl-switch id="notificationsEnabled" checked>Enable Notifications</sl-switch>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Minimum Priority for Notifications</label>
+          <sl-select id="minPriority" value="medium">
+            <sl-option value="low">Low</sl-option>
+            <sl-option value="medium">Medium</sl-option>
+            <sl-option value="high">High</sl-option>
+          </sl-select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
+          <sl-input id="keywords" placeholder="weavy, chat, collaboration, integration"></sl-input>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Intents (comma-separated)</label>
+          <sl-input id="intents" placeholder="feature_request, bug_report, competitive_intel"></sl-input>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+  let editor;
+  let currentConfig;
+
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+
+  require(['vs/editor/editor.main'], function () {
+    editor = monaco.editor.create(document.getElementById('editor'), {
+      value: '',
+      language: 'markdown',
+      theme: 'vs-dark',
+      wordWrap: 'on',
+      minimap: { enabled: false },
+      lineNumbers: 'on',
+      automaticLayout: true
+    });
+
+    editor.onDidChangeModelContent(() => {
+      updatePreview();
+      localStorage.setItem('bgAgentDraft', editor.getValue());
+    });
+
+    // Load config after editor is ready
+    loadConfig();
+
+    // Check for draft after config loads
+    checkForDraft();
+  });
+
+  async function loadConfig() {
+    try {
+      const response = await fetch('/api/admin/agent-config/background');
+      const data = await response.json();
+
+      if (data.success) {
+        currentConfig = data.config;
+        editor.setValue(data.config.instructions);
+        document.getElementById('currentVersion').textContent = data.config.currentVersion;
+        document.getElementById('lastUpdated').textContent = new Date(data.config.lastUpdated).toLocaleString();
+
+        // Load notification settings
+        if (data.config.notificationSettings) {
+          document.getElementById('notificationsEnabled').checked = data.config.notificationSettings.enabled;
+          document.getElementById('minPriority').value = data.config.notificationSettings.minPriority;
+          document.getElementById('keywords').value = data.config.notificationSettings.keywords?.join(', ') || '';
+          document.getElementById('intents').value = data.config.notificationSettings.intents?.join(', ') || '';
+        }
+
+        updatePreview();
+        localStorage.removeItem('bgAgentDraft');
+      }
+    } catch (error) {
+      console.error('Error loading config:', error);
+      // Silently log error, don't alert
+    }
+  }
+
+  function checkForDraft() {
+    const draft = localStorage.getItem('bgAgentDraft');
+    if (draft && editor && confirm('You have unsaved changes. Would you like to restore them?')) {
+      editor.setValue(draft);
+    }
+  }
+
+  function updatePreview() {
+    if (!window.marked || !editor) return;
+
+    try {
+      const markdown = editor.getValue();
+      const html = marked.parse(markdown);
+      document.getElementById('preview').innerHTML = html;
+    } catch (error) {
+      console.error('Error updating preview:', error);
+    }
+  }
+
+  async function saveConfig() {
+    const instructions = editor.getValue();
+    const changeNotes = document.getElementById('changeNotes').value;
+
+    if (!instructions.trim()) {
+      alert('Instructions cannot be empty');
+      return;
+    }
+
+    const notificationSettings = {
+      enabled: document.getElementById('notificationsEnabled').checked,
+      minPriority: document.getElementById('minPriority').value,
+      keywords: document.getElementById('keywords').value.split(',').map(k => k.trim()).filter(k => k),
+      intents: document.getElementById('intents').value.split(',').map(i => i.trim()).filter(i => i)
+    };
+
+    const saveButton = document.getElementById('saveButton');
+    saveButton.loading = true;
+
+    try {
+      const response = await fetch('/api/admin/agent-config/background', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instructions, notificationSettings, changeNotes })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`Configuration saved successfully! New version: ${data.version}`);
+        document.getElementById('changeNotes').value = '';
+        await loadConfig();
+      } else {
+        alert(data.error || 'Error saving configuration');
+      }
+    } catch (error) {
+      console.error('Error saving config:', error);
+      alert('Error saving configuration');
+    } finally {
+      saveButton.loading = false;
+    }
+  }
+
+  async function runAgentNow() {
+    if (!confirm('This will manually run the background intelligence agent. Continue?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/agent/run', { method: 'POST' });
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`Agent ran successfully!\nProcessed: ${data.result.processed} items\nTasks created: ${data.result.tasksCreated}\nNotifications sent: ${data.result.notificationsSent}`);
+      } else {
+        alert('Error running agent');
+      }
+    } catch (error) {
+      console.error('Error running agent:', error);
+      alert('Error running agent');
+    }
+  }
+
+  function loadVersionHistory() {
+    window.location.href = '/admin/agent-config/background/versions';
+  }
+
+  // Auto-save draft every 30 seconds
+  setInterval(() => {
+    if (editor) {
+      localStorage.setItem('bgAgentDraft', editor.getValue());
+    }
+  }, 30000);
+</script>

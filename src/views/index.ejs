@@ -1,0 +1,555 @@
+<div class="space-y-8">
+  <!-- Header -->
+  <div>
+    <h1 class="text-3xl font-bold text-gray-900">Community Intelligence</h1>
+    <p class="mt-2 text-gray-600">Search and analyze community feedback across Discord, Reddit, X, and LinkedIn</p>
+  </div>
+
+  <!-- Search Section -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-xl font-semibold mb-4">Semantic Search</h2>
+    <form id="searchForm" class="space-y-4">
+      <div>
+        <sl-input
+          id="searchQuery"
+          placeholder="Search community content..."
+          size="large"
+          clearable
+        ></sl-input>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <sl-select id="platformFilter" placeholder="All Platforms" clearable>
+          <sl-option value="">All Platforms</sl-option>
+          <sl-option value="Discord">Discord</sl-option>
+          <sl-option value="Reddit">Reddit</sl-option>
+          <sl-option value="X">X (Twitter)</sl-option>
+          <sl-option value="LinkedIn">LinkedIn</sl-option>
+        </sl-select>
+
+        <sl-select id="limitSelect" placeholder="Results" value="10">
+          <sl-option value="5">5 results</sl-option>
+          <sl-option value="10">10 results</sl-option>
+          <sl-option value="20">20 results</sl-option>
+          <sl-option value="50">50 results</sl-option>
+        </sl-select>
+
+        <sl-button type="submit" variant="primary" size="large" class="w-full">
+          <sl-icon slot="prefix" name="search"></sl-icon>
+          Search
+        </sl-button>
+      </div>
+    </form>
+
+    <div id="searchResults" class="mt-6"></div>
+  </div>
+
+  <!-- Ask Section -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-xl font-semibold mb-4">Ask Claude - Deep Community Analysis</h2>
+    <p class="text-sm text-gray-600 mb-4">Ask questions about community feedback and get AI-powered insights with configurable depth</p>
+
+    <form id="askForm" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Your Question</label>
+        <sl-textarea
+          id="askQuestion"
+          placeholder="What are developers saying about collaboration features? What are the top feature requests? What pain points are mentioned most?"
+          rows="3"
+          resize="auto"
+        ></sl-textarea>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Analysis Depth</label>
+          <sl-select id="analysisDepth" value="standard">
+            <sl-option value="quick">Quick (10 results)</sl-option>
+            <sl-option value="standard">Standard (25 results)</sl-option>
+            <sl-option value="deep">Deep (50 results)</sl-option>
+            <sl-option value="comprehensive">Comprehensive (100 results)</sl-option>
+          </sl-select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Time Range</label>
+          <sl-select id="timeRange" value="all">
+            <sl-option value="7">Last 7 days</sl-option>
+            <sl-option value="30">Last 30 days</sl-option>
+            <sl-option value="90">Last 90 days</sl-option>
+            <sl-option value="180">Last 6 months</sl-option>
+            <sl-option value="365">Last year</sl-option>
+            <sl-option value="all">All time</sl-option>
+          </sl-select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Platform Filter</label>
+          <sl-select id="askPlatformFilter" value="" clearable>
+            <sl-option value="">All Platforms</sl-option>
+            <sl-option value="Discord">Discord</sl-option>
+            <sl-option value="Reddit">Reddit</sl-option>
+            <sl-option value="X">X (Twitter)</sl-option>
+            <sl-option value="LinkedIn">LinkedIn</sl-option>
+          </sl-select>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4 flex-wrap">
+        <sl-button type="submit" variant="primary" size="large">
+          <sl-icon slot="prefix" name="chat-dots"></sl-icon>
+          Analyze with Claude
+        </sl-button>
+
+        <sl-dropdown id="historyDropdown" distance="4">
+          <sl-button slot="trigger" size="large" caret>
+            <sl-icon slot="prefix" name="clock-history"></sl-icon>
+            Recent
+          </sl-button>
+          <sl-menu id="historyMenu">
+            <sl-menu-item disabled>Loading...</sl-menu-item>
+          </sl-menu>
+        </sl-dropdown>
+
+        <sl-checkbox id="includePatterns">Include pattern analysis</sl-checkbox>
+        <sl-checkbox id="includeTrends">Identify trends over time</sl-checkbox>
+      </div>
+    </form>
+
+    <div id="askResults" class="mt-6"></div>
+  </div>
+
+  <!-- Conversation History Modal -->
+  <sl-dialog id="historyModal" label="Conversation History" style="--width: 900px;">
+    <div class="space-y-4">
+      <!-- Search and Filters -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <sl-input id="historySearch" placeholder="Search conversations..." clearable>
+          <sl-icon slot="prefix" name="search"></sl-icon>
+        </sl-input>
+
+        <sl-select id="historyDepthFilter" placeholder="All Depths" clearable>
+          <sl-option value="">All Depths</sl-option>
+          <sl-option value="quick">Quick</sl-option>
+          <sl-option value="standard">Standard</sl-option>
+          <sl-option value="deep">Deep</sl-option>
+          <sl-option value="comprehensive">Comprehensive</sl-option>
+        </sl-select>
+
+        <sl-button id="searchHistoryBtn" variant="primary">
+          <sl-icon slot="prefix" name="search"></sl-icon>
+          Search
+        </sl-button>
+      </div>
+
+      <!-- Conversation List -->
+      <div id="historyList" class="max-h-96 overflow-y-auto">
+        <div class="text-center py-8">
+          <sl-spinner></sl-spinner>
+          <p class="mt-2 text-gray-500">Loading conversations...</p>
+        </div>
+      </div>
+    </div>
+  </sl-dialog>
+
+  <!-- Quick Stats -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-indigo-100 rounded-md p-3">
+          <sl-icon name="inboxes" class="text-2xl text-indigo-600"></sl-icon>
+        </div>
+        <div class="ml-4">
+          <p class="text-sm font-medium text-gray-500">Open Tasks</p>
+          <p id="openTasksCount" class="text-2xl font-semibold text-gray-900">-</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-green-100 rounded-md p-3">
+          <sl-icon name="check-circle" class="text-2xl text-green-600"></sl-icon>
+        </div>
+        <div class="ml-4">
+          <p class="text-sm font-medium text-gray-500">Completed Today</p>
+          <p id="completedTodayCount" class="text-2xl font-semibold text-gray-900">-</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-yellow-100 rounded-md p-3">
+          <sl-icon name="exclamation-triangle" class="text-2xl text-yellow-600"></sl-icon>
+        </div>
+        <div class="ml-4">
+          <p class="text-sm font-medium text-gray-500">High Priority</p>
+          <p id="highPriorityCount" class="text-2xl font-semibold text-gray-900">-</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Load task counts
+  async function loadTaskCounts() {
+    try {
+      const response = await fetch('/api/tasks/count', { credentials: 'include' });
+      const data = await response.json();
+      if (data.success) {
+        document.getElementById('openTasksCount').textContent = data.count;
+      }
+    } catch (error) {
+      console.error('Error loading task counts:', error);
+    }
+  }
+
+  // Search form handler
+  document.getElementById('searchForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const query = document.getElementById('searchQuery').value;
+    const platform = document.getElementById('platformFilter').value;
+    const limit = document.getElementById('limitSelect').value;
+
+    if (!query) {
+      alert('Please enter a search query');
+      return;
+    }
+
+    const resultsDiv = document.getElementById('searchResults');
+    resultsDiv.innerHTML = '<sl-spinner></sl-spinner> Searching...';
+
+    try {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          query,
+          limit,
+          filters: { platform: platform || undefined }
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.results.length > 0) {
+        resultsDiv.innerHTML = `
+          <h3 class="font-semibold mb-3">Found ${data.count} results</h3>
+          ${data.results.map(result => `
+            <div class="border rounded-lg p-4 mb-3">
+              <div class="flex items-center justify-between mb-2">
+                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${result.metadata.platform || 'Unknown'}</span>
+                <span class="text-xs text-gray-500">Relevance: ${(result.relevanceScore * 100).toFixed(1)}%</span>
+              </div>
+              <p class="text-sm text-gray-700">${result.content}</p>
+              ${result.metadata.author ? `<p class="text-xs text-gray-500 mt-2">By ${result.metadata.author}</p>` : ''}
+            </div>
+          `).join('')}
+        `;
+      } else {
+        resultsDiv.innerHTML = '<p class="text-gray-500">No results found</p>';
+      }
+    } catch (error) {
+      resultsDiv.innerHTML = '<p class="text-red-600">Error performing search</p>';
+      console.error('Search error:', error);
+    }
+  });
+
+  // Ask form handler
+  document.getElementById('askForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const question = document.getElementById('askQuestion').value;
+    if (!question) {
+      alert('Please enter a question');
+      return;
+    }
+
+    // Get analysis parameters
+    const analysisDepth = document.getElementById('analysisDepth').value;
+    const timeRange = document.getElementById('timeRange').value;
+    const platform = document.getElementById('askPlatformFilter').value;
+    const includePatterns = document.getElementById('includePatterns').checked;
+    const includeTrends = document.getElementById('includeTrends').checked;
+
+    // Map depth to result count
+    const depthMap = {
+      quick: 10,
+      standard: 25,
+      deep: 50,
+      comprehensive: 100
+    };
+    const contextLimit = depthMap[analysisDepth] || 25;
+
+    const resultsDiv = document.getElementById('askResults');
+    resultsDiv.innerHTML = `
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <sl-spinner></sl-spinner>
+        <p class="mt-2 text-sm text-blue-900">Analyzing ${contextLimit} community posts${timeRange !== 'all' ? ` from the last ${timeRange} days` : ''}...</p>
+        <p class="text-xs text-blue-700 mt-1">This may take 30-60 seconds for comprehensive analysis</p>
+      </div>
+    `;
+
+    try {
+      const requestBody = {
+        question,
+        contextLimit,
+        includePatterns,
+        includeTrends,
+        filters: {}
+      };
+
+      // Add time range filter
+      if (timeRange !== 'all') {
+        const days = parseInt(timeRange);
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        requestBody.filters.startDate = startDate.toISOString();
+      }
+
+      // Add platform filter
+      if (platform) {
+        requestBody.filters.platform = platform;
+      }
+
+      const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Render Markdown to HTML
+        const renderedHtml = marked.parse(data.answer);
+
+        resultsDiv.innerHTML = `
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-blue-900">Claude's Deep Analysis</h3>
+              <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">
+                ${data.sourcesAnalyzed || data.sources.length} sources analyzed
+              </span>
+            </div>
+            <div class="prose prose-sm max-w-none text-gray-700">${renderedHtml}</div>
+            ${data.sources.length > 0 ? `
+              <div class="mt-4 pt-4 border-t border-blue-200">
+                <details class="text-sm">
+                  <summary class="cursor-pointer text-blue-700 font-medium hover:text-blue-800">
+                    View ${data.sources.length} source references
+                  </summary>
+                  <div class="mt-2 space-y-2">
+                    ${data.sources.slice(0, 10).map(s => `
+                      <div class="text-xs">
+                        <span class="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded">${s.platform || 'Unknown'}</span>
+                        <span class="text-gray-600">Relevance: ${((s.relevance || 0) * 100).toFixed(0)}%</span>
+                      </div>
+                    `).join('')}
+                    ${data.sources.length > 10 ? `<p class="text-xs text-gray-500">... and ${data.sources.length - 10} more sources</p>` : ''}
+                  </div>
+                </details>
+              </div>
+            ` : ''}
+            ${data.usage ? `
+              <div class="mt-2 text-xs text-blue-600">
+                Tokens used: ${data.usage.input_tokens?.toLocaleString()} input, ${data.usage.output_tokens?.toLocaleString()} output
+              </div>
+            ` : ''}
+          </div>
+        `;
+      } else {
+        resultsDiv.innerHTML = '<p class="text-red-600">Error processing question: ' + (data.error || 'Unknown error') + '</p>';
+      }
+    } catch (error) {
+      resultsDiv.innerHTML = '<p class="text-red-600">Error asking Claude: ' + error.message + '</p>';
+      console.error('Ask error:', error);
+    }
+  });
+
+  // Load conversation history
+  async function loadRecentConversations() {
+    try {
+      console.log('Loading recent conversations...');
+      const response = await fetch('/api/conversations/recent?limit=10', { credentials: 'include' });
+      console.log('Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Recent conversations response:', data);
+
+      const menu = document.getElementById('historyMenu');
+      if (!menu) {
+        console.error('History menu element not found');
+        return;
+      }
+
+      if (data.success && data.conversations && data.conversations.length > 0) {
+        menu.innerHTML = data.conversations.map(conv => `
+          <sl-menu-item value="${conv._id}" data-conversation-id="${conv._id}">
+            <div class="text-sm">
+              <div class="font-medium">${conv.title}</div>
+              <div class="text-xs text-gray-500">${new Date(conv.createdAt).toLocaleDateString()}</div>
+            </div>
+          </sl-menu-item>
+        `).join('') + `
+          <sl-divider></sl-divider>
+          <sl-menu-item id="viewAllMenuItem">
+            <sl-icon slot="prefix" name="list"></sl-icon>
+            View All...
+          </sl-menu-item>
+        `;
+        console.log(`Loaded ${data.conversations.length} conversations`);
+      } else {
+        menu.innerHTML = '<sl-menu-item disabled>No conversations yet</sl-menu-item>';
+        console.log('No conversations found');
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+      const menu = document.getElementById('historyMenu');
+      if (menu) {
+        menu.innerHTML = '<sl-menu-item disabled>Error loading</sl-menu-item>';
+      }
+    }
+  }
+
+  async function loadConversation(id) {
+    try {
+      console.log('Loading conversation:', id);
+      const response = await fetch(`/api/conversations/${id}`, { credentials: 'include' });
+      console.log('Conversation response status:', response.status);
+      const data = await response.json();
+      console.log('Conversation data:', data);
+
+      if (data.success) {
+        const conv = data.conversation;
+        const renderedHtml = marked.parse(conv.answer);
+
+        document.getElementById('askResults').innerHTML = `
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-blue-900">${conv.title}</h3>
+              <span class="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded">
+                ${conv.sourcesAnalyzed || 0} sources • ${new Date(conv.createdAt).toLocaleString()}
+              </span>
+            </div>
+            <div class="mb-3 p-3 bg-white rounded border border-blue-200">
+              <p class="text-sm font-medium text-gray-700">Question:</p>
+              <p class="text-sm text-gray-600 mt-1">${conv.question}</p>
+            </div>
+            <div class="prose prose-sm max-w-none text-gray-700">${renderedHtml}</div>
+          </div>
+        `;
+
+        // Scroll to results
+        document.getElementById('askResults').scrollIntoView({ behavior: 'smooth' });
+        console.log('Conversation loaded successfully');
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      alert('Error loading conversation');
+    }
+  }
+
+  function showHistoryModal() {
+    const modal = document.getElementById('historyModal');
+    modal.show();
+    searchHistory();
+  }
+
+  async function searchHistory() {
+    const searchQuery = document.getElementById('historySearch').value;
+    const depthFilter = document.getElementById('historyDepthFilter').value;
+
+    const params = new URLSearchParams();
+    if (searchQuery) params.append('q', searchQuery);
+    if (depthFilter) params.append('analysisDepth', depthFilter);
+    params.append('limit', '50');
+
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = '<div class="text-center py-8"><sl-spinner></sl-spinner></div>';
+
+    try {
+      const response = await fetch(`/api/conversations/search?${params.toString()}`, { credentials: 'include' });
+      const data = await response.json();
+
+      if (data.success && data.conversations.length > 0) {
+        historyList.innerHTML = data.conversations.map(conv => `
+          <div class="border rounded-lg p-4 mb-3 hover:bg-gray-50 cursor-pointer" data-conversation-id="${conv._id}">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h4 class="font-semibold text-gray-900">${conv.title}</h4>
+                <p class="text-sm text-gray-600 mt-1">${conv.question}</p>
+                <div class="flex gap-2 mt-2">
+                  <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">${conv.analysisDepth}</span>
+                  <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">${conv.sourcesAnalyzed || 0} sources</span>
+                  ${conv.createdBy ? `<span class="text-xs text-gray-500">by ${conv.createdBy.name}</span>` : ''}
+                </div>
+              </div>
+              <div class="text-xs text-gray-500 ml-4">
+                ${new Date(conv.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+        `).join('');
+
+        // Add event listeners to conversation items
+        historyList.querySelectorAll('[data-conversation-id]').forEach(item => {
+          item.addEventListener('click', () => {
+            loadConversation(item.dataset.conversationId);
+            document.getElementById('historyModal').hide();
+          });
+        });
+      } else {
+        historyList.innerHTML = '<p class="text-center text-gray-500 py-8">No conversations found</p>';
+      }
+    } catch (error) {
+      console.error('Error searching conversations:', error);
+      historyList.innerHTML = '<p class="text-center text-red-600 py-8">Error loading conversations</p>';
+    }
+  }
+
+  // Load counts and history on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM fully loaded');
+    loadTaskCounts();
+    loadRecentConversations();
+
+    // Add event listener for search history button
+    const searchBtn = document.getElementById('searchHistoryBtn');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        searchHistory();
+      });
+    }
+
+    // Add event listener for history dropdown selections (sl-select is on the dropdown, not menu!)
+    const historyDropdown = document.getElementById('historyDropdown');
+    if (historyDropdown) {
+      console.log('Adding event listener to history dropdown');
+
+      historyDropdown.addEventListener('sl-select', (e) => {
+        console.log('sl-select event fired:', e.detail);
+        const item = e.detail.item;
+
+        if (item.id === 'viewAllMenuItem') {
+          console.log('View All clicked');
+          showHistoryModal();
+        } else if (item.dataset.conversationId) {
+          console.log('Menu item clicked:', item.dataset.conversationId);
+          loadConversation(item.dataset.conversationId);
+        }
+      });
+    } else {
+      console.error('History dropdown element not found on page load');
+    }
+  });
+</script>
