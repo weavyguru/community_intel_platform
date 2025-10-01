@@ -23,11 +23,11 @@
       <p class="mt-2 text-gray-600">Configure the AI that analyzes community posts to generate engagement tasks</p>
     </div>
     <div class="flex gap-2">
-      <sl-button onclick="loadVersionHistory()" variant="default">
+      <sl-button id="versionHistoryButton" variant="default">
         <sl-icon slot="prefix" name="clock-history"></sl-icon>
         Version History
       </sl-button>
-      <sl-button id="saveButton" onclick="saveConfig()" variant="primary">
+      <sl-button id="saveButton" variant="primary">
         <sl-icon slot="prefix" name="save"></sl-icon>
         Save Changes
       </sl-button>
@@ -70,10 +70,10 @@
     <!-- Preview Tabs -->
     <div class="bg-gray-50 rounded-lg p-4">
       <div class="flex space-x-4 mb-4 border-b border-gray-200">
-        <button id="previewInstructionsTab" onclick="showPreview('instructions')" class="px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600">
+        <button id="previewInstructionsTab" class="px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600">
           Instructions Preview
         </button>
-        <button id="previewValuePropsTab" onclick="showPreview('valueProps')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+        <button id="previewValuePropsTab" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
           Value Props Preview
         </button>
       </div>
@@ -91,7 +91,7 @@
       <p class="mt-2 text-gray-500">Loading versions...</p>
     </div>
   </div>
-  <sl-button slot="footer" variant="default" onclick="document.getElementById('versionHistoryModal').hide()">
+  <sl-button id="closeModalButton" slot="footer" variant="default">
     Close
   </sl-button>
 </sl-dialog>
@@ -145,6 +145,19 @@
 
     // Check for drafts after config loads
     checkForDraft();
+
+    // Add event listeners
+    document.getElementById('saveButton').addEventListener('click', saveConfig);
+    document.getElementById('versionHistoryButton').addEventListener('click', loadVersionHistory);
+    document.getElementById('closeModalButton').addEventListener('click', () => {
+      document.getElementById('versionHistoryModal').hide();
+    });
+    document.getElementById('previewInstructionsTab').addEventListener('click', () => {
+      showPreview('instructions');
+    });
+    document.getElementById('previewValuePropsTab').addEventListener('click', () => {
+      showPreview('valueProps');
+    });
   });
 
   async function loadConfig() {
@@ -265,7 +278,7 @@
             ${v.changeNotes ? `<p class="text-sm text-gray-600 mb-2">${v.changeNotes}</p>` : ''}
             <p class="text-xs text-gray-500">By: ${v.createdBy?.name || 'Unknown'}</p>
             <div class="mt-2">
-              <sl-button size="small" onclick="restoreVersion(${v.version})">
+              <sl-button size="small" class="restore-version-btn" data-version="${v.version}">
                 <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
                 Restore
               </sl-button>
@@ -274,6 +287,15 @@
         `).join('');
 
         document.getElementById('versionHistoryContent').innerHTML = html || '<p class="text-center text-gray-500">No version history</p>';
+
+        // Add event listeners to restore buttons using event delegation
+        document.getElementById('versionHistoryContent').addEventListener('click', (e) => {
+          const restoreBtn = e.target.closest('.restore-version-btn');
+          if (restoreBtn) {
+            const version = parseInt(restoreBtn.getAttribute('data-version'));
+            restoreVersion(version);
+          }
+        });
       }
     } catch (error) {
       console.error('Error loading versions:', error);

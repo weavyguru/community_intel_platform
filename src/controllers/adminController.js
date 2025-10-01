@@ -68,11 +68,20 @@ exports.getAgentConfig = async (req, res) => {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
-    const config = await AgentConfig.findOne({ type })
+    let config = await AgentConfig.findOne({ type })
       .populate('updatedBy', 'name email');
 
+    // Create default config if it doesn't exist
     if (!config) {
-      return res.status(404).json({ error: 'Agent configuration not found' });
+      config = await AgentConfig.create({
+        type,
+        instructions: `# ${type === 'create-tasks' ? 'Task Generation' : type.charAt(0).toUpperCase() + type.slice(1)} Agent Instructions\n\nAdd your instructions here...`,
+        valuePropositions: type === 'create-tasks' ? '# Value Propositions\n\nAdd value propositions here...' : undefined,
+        currentVersion: 1,
+        updatedBy: req.user._id
+      });
+
+      await config.populate('updatedBy', 'name email');
     }
 
     res.json({
@@ -153,7 +162,7 @@ exports.getVersionHistory = async (req, res) => {
     const { type } = req.params;
     const { limit = 20, skip = 0 } = req.query;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
@@ -184,7 +193,7 @@ exports.getSpecificVersion = async (req, res) => {
   try {
     const { type, versionNumber } = req.params;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
@@ -214,7 +223,7 @@ exports.restoreVersion = async (req, res) => {
   try {
     const { type, versionNumber } = req.params;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
@@ -241,6 +250,7 @@ exports.restoreVersion = async (req, res) => {
       type,
       version: newVersion,
       instructions: versionToRestore.instructions,
+      valuePropositions: versionToRestore.valuePropositions,
       searchFunctions: versionToRestore.searchFunctions,
       notificationSettings: versionToRestore.notificationSettings,
       createdBy: req.user._id,
@@ -249,6 +259,7 @@ exports.restoreVersion = async (req, res) => {
 
     // Update current config
     config.instructions = versionToRestore.instructions;
+    if (versionToRestore.valuePropositions !== undefined) config.valuePropositions = versionToRestore.valuePropositions;
     config.searchFunctions = versionToRestore.searchFunctions;
     config.notificationSettings = versionToRestore.notificationSettings;
     config.currentVersion = newVersion;
@@ -277,7 +288,7 @@ exports.compareVersions = async (req, res) => {
   try {
     const { type, v1, v2 } = req.params;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
