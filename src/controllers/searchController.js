@@ -16,11 +16,12 @@ exports.search = async (req, res) => {
 
     // Parse filters
     const chromaFilters = {};
-    if (filters.platform) chromaFilters.platform = filters.platform;
+    if (filters.platforms && filters.platforms.length > 0) chromaFilters.platforms = filters.platforms;
     if (filters.author) chromaFilters.author = filters.author;
     if (filters.intent) chromaFilters.intent = filters.intent;
     if (filters.startDate) chromaFilters.startDate = new Date(filters.startDate);
     if (filters.endDate) chromaFilters.endDate = new Date(filters.endDate);
+    if (filters.includeComments !== undefined) chromaFilters.includeComments = filters.includeComments;
 
     const results = await chromaService.searchSemantic(query, parseInt(limit), chromaFilters);
 
@@ -73,13 +74,14 @@ exports.ask = async (req, res) => {
 
     // Build Chroma filters
     const chromaFilters = {};
-    if (filters.platform) chromaFilters.platform = filters.platform;
+    if (filters.platforms && filters.platforms.length > 0) chromaFilters.platforms = filters.platforms;
     if (filters.startDate) {
       chromaFilters.startDate = new Date(filters.startDate);
     }
     if (filters.endDate) {
       chromaFilters.endDate = new Date(filters.endDate);
     }
+    if (filters.includeComments !== undefined) chromaFilters.includeComments = filters.includeComments;
 
     // Search for relevant context
     console.log(`Deep analysis: Searching for ${contextLimit} results with filters`, chromaFilters);

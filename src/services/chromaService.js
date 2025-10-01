@@ -172,8 +172,9 @@ class ChromaService {
   _buildWhereClause(filters) {
     const where = {};
 
-    if (filters.platform) {
-      where.platform = { $eq: filters.platform };
+    // Handle platforms array with $in operator
+    if (filters.platforms && filters.platforms.length > 0) {
+      where.platform = { $in: filters.platforms };
     }
 
     if (filters.author) {
@@ -182,6 +183,14 @@ class ChromaService {
 
     if (filters.intent) {
       where.intent = { $eq: filters.intent };
+    }
+
+    // Handle is_comment filter based on includeComments
+    if (filters.includeComments === false) {
+      // Only posts (is_comment = false)
+      where.is_comment = { $eq: false };
+    } else if (filters.includeComments === true) {
+      // Both posts and comments - no filter needed
     }
 
     // Note: Time-based filtering is done post-query in the results
