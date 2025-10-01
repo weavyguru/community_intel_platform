@@ -260,7 +260,32 @@
     <div slot="label" id="drawerLabel" class="flex items-center gap-2">
       <span id="drawerTitle">Claude Analysis</span>
       <sl-badge id="drawerBadge" variant="neutral" pill style="display: none;">0 sources</sl-badge>
+      <sl-button id="generateTasksBtn" size="small" variant="primary" style="display: none; margin-left: auto;" onclick="generateTasks()">
+        <sl-icon slot="prefix" name="list-task"></sl-icon>
+        Generate Tasks
+      </sl-button>
     </div>
+
+    <!-- Task Suggestions Container -->
+    <div id="taskSuggestionsContainer" class="hidden mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold text-gray-900">Suggested Engagement Tasks</h3>
+        <sl-badge id="taskCountBadge" variant="primary" pill>0</sl-badge>
+      </div>
+      <div id="taskSuggestionsList" class="space-y-3"></div>
+    </div>
+
+    <!-- Task Generation Status -->
+    <div id="taskGenerationStatus" class="hidden mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+      <div class="flex items-center gap-3">
+        <sl-spinner style="font-size: 1.5rem;"></sl-spinner>
+        <div>
+          <p id="taskGenStatusText" class="text-sm font-medium text-indigo-900">Analyzing sources...</p>
+          <p id="taskGenStatusDetail" class="text-xs text-indigo-700 mt-1"></p>
+        </div>
+      </div>
+    </div>
+
     <div id="drawerContent" class="prose prose-sm max-w-none"></div>
   </sl-drawer>
 
@@ -715,6 +740,19 @@ Trends: ${includeTrends}`;
         badge.textContent = `${conv.sourcesAnalyzed || 0} sources`;
         badge.style.display = 'inline-block';
 
+        // Store current conversation ID globally
+        window.currentConversationId = conv._id;
+
+        // Show Generate Tasks button or display existing tasks
+        const genTasksBtn = document.getElementById('generateTasksBtn');
+        if (conv.suggestedTasks && conv.suggestedTasks.length > 0) {
+          displaySuggestedTasks(conv.suggestedTasks);
+          genTasksBtn.style.display = 'none';
+        } else {
+          genTasksBtn.style.display = 'inline-flex';
+          document.getElementById('taskSuggestionsContainer').classList.add('hidden');
+        }
+
         // Close history modal if open
         const historyModal = document.getElementById('historyModal');
         if (historyModal) {
@@ -825,6 +863,162 @@ Trends: ${includeTrends}`;
       });
     } else {
       console.error('History dropdown element not found on page load');
+    }
+  });
+
+  // ============= TASK GENERATION FUNCTIONS =============
+
+  async function generateTasks() {
+    if (!window.currentConversationId) return;
+
+    const genBtn = document.getElementById('generateTasksBtn');
+    genBtn.loading = true;
+
+    document.getElementById('taskGenerationStatus').classList.remove('hidden');
+
+    try {
+      const response = await fetch(`/api/conversations/${window.currentConversationId}/generate-tasks`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        displaySuggestedTasks(data.suggestedTasks);
+        genBtn.style.display = 'none';
+      } else {
+        alert('Error: ' + (data.error || 'Failed to generate tasks'));
+      }
+    } catch (error) {
+      console.error('Generate tasks error:', error);
+      alert('Error generating tasks');
+    } finally {
+      genBtn.loading = false;
+      document.getElementById('taskGenerationStatus').classList.add('hidden');
+    }
+  }
+
+  function displaySuggestedTasks(tasks) {
+    const container = document.getElementById('taskSuggestionsContainer');
+    const list = document.getElementById('taskSuggestionsList');
+    const badge = document.getElementById('taskCountBadge');
+
+    const pendingTasks = tasks.filter(t => t.status === 'pending');
+    badge.textContent = pendingTasks.length;
+    container.classList.remove('hidden');
+
+    list.innerHTML = tasks.map((task, index) => `
+      <div class="p-3 bg-white rounded border border-gray-300">
+        <div class="flex items-center justify-between mb-2">
+          <sl-badge variant="${task.shouldEngage ? 'success' : 'neutral'}" pill>
+            ${task.shouldEngage ? '✓ Engage' : 'Skip'} (Score: ${task.score}/12)
+          </sl-badge>
+          <sl-badge variant="neutral">${task.platform}</sl-badge>
+        </div>
+        <p class="text-xs text-gray-600 mb-2"><strong>${task.author}</strong></p>
+        <p class="text-xs text-gray-700 mb-2">${task.reasoning}</p>
+        ${task.suggestedResponse ? `
+          <div class="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
+            <p class="text-xs font-medium text-gray-700 mb-1">Suggested Response:</p>
+            <p class="text-xs text-gray-600">${task.suggestedResponse}</p>
+          </div>
+        ` : ''}
+        ${task.sourceDeeplink ? `
+          <a href="${task.sourceDeeplink}" target="_blank" class="text-xs text-indigo-600 hover:underline mt-2 inline-block">
+            View original post →
+          </a>
+        ` : ''}
+        <div class="mt-3 flex gap-2">
+          ${task.status === 'pending' && task.shouldEngage ? `
+            <sl-button size="small" variant="primary" onclick="createTaskFromSuggestion(${index})">
+              <sl-icon slot="prefix" name="plus"></sl-icon>
+              Create Task
+            </sl-button>
+          ` : task.status === 'created' ? `
+            <sl-badge variant="success">✓ Task Created</sl-badge>
+          ` : ''}
+          ${task.status === 'pending' ? `
+            <sl-button size="small" variant="default" onclick="skipTask(${index})">
+              Skip
+            </sl-button>
+          ` : task.status === 'rejected' ? `
+            <sl-badge variant="neutral">Skipped</sl-badge>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function createTaskFromSuggestion(taskIndex) {
+    try {
+      const response = await fetch(`/api/conversations/${window.currentConversationId}/tasks/${taskIndex}/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({})
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('Task created successfully!');
+        await loadConversation(window.currentConversationId);
+      } else {
+        alert('Error: ' + (data.error || 'Failed to create task'));
+      }
+    } catch (error) {
+      console.error('Create task error:', error);
+      alert('Error creating task');
+    }
+  }
+
+  async function skipTask(taskIndex) {
+    try {
+      const response = await fetch(`/api/conversations/${window.currentConversationId}/tasks/${taskIndex}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        await loadConversation(window.currentConversationId);
+      }
+    } catch (error) {
+      console.error('Skip task error:', error);
+    }
+  }
+
+  // Listen for task generation Socket.IO events
+  socket.on('task-generation:started', (data) => {
+    if (data.userId === '<%= user._id %>') {
+      document.getElementById('taskGenStatusText').textContent = 'Analyzing sources...';
+      document.getElementById('taskGenStatusDetail').textContent = `Processing ${data.totalSources} high-relevance sources`;
+    }
+  });
+
+  socket.on('task-generation:progress', (data) => {
+    if (data.userId === '<%= user._id %>') {
+      document.getElementById('taskGenStatusText').textContent = `Analyzing source ${data.current} of ${data.total}`;
+      document.getElementById('taskGenStatusDetail').textContent = `${data.platform} - ${data.author}`;
+    }
+  });
+
+  socket.on('task-generation:complete', (data) => {
+    if (data.userId === '<%= user._id %>') {
+      document.getElementById('taskGenStatusText').textContent = 'Analysis complete!';
+      document.getElementById('taskGenStatusDetail').textContent = `Generated ${data.tasksGenerated} task suggestions`;
+      setTimeout(() => {
+        document.getElementById('taskGenerationStatus').classList.add('hidden');
+      }, 2000);
+    }
+  });
+
+  socket.on('task-generation:error', (data) => {
+    if (data.userId === '<%= user._id %>') {
+      document.getElementById('taskGenerationStatus').classList.add('hidden');
+      alert('Error generating tasks: ' + data.error);
     }
   });
 </script>
