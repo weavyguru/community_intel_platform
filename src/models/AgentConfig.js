@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 
 const agentConfigSchema = new mongoose.Schema({
-  type: { type: String, enum: ['ask', 'background'], required: true, unique: true },
+  type: { type: String, enum: ['ask', 'background', 'create-tasks'], required: true, unique: true },
   instructions: { type: String, required: true }, // Current Markdown instructions
+  valuePropositions: { type: String }, // For create-tasks agent - Weavy context
   searchFunctions: [{
     name: String,
     description: String,
@@ -21,9 +22,10 @@ const agentConfigSchema = new mongoose.Schema({
 
 const agentConfigVersionSchema = new mongoose.Schema({
   configId: { type: mongoose.Schema.Types.ObjectId, ref: 'AgentConfig', required: true },
-  type: { type: String, enum: ['ask', 'background'], required: true },
+  type: { type: String, enum: ['ask', 'background', 'create-tasks'], required: true },
   version: { type: Number, required: true },
   instructions: { type: String, required: true }, // Markdown format
+  valuePropositions: { type: String }, // For create-tasks agent - Weavy context
   searchFunctions: [{
     name: String,
     description: String,

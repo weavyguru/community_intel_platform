@@ -205,6 +205,25 @@ If no action needed, respond: {"needsAction": false}`;
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  async analyzeForTask(prompt) {
+    try {
+      const response = await this._callClaudeWithRetry({
+        model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929',
+        system: 'You are a community engagement analyst. Analyze posts and provide structured JSON responses.',
+        messages: [{
+          role: 'user',
+          content: prompt
+        }],
+        max_tokens: 1024
+      });
+
+      return response.content[0].text;
+    } catch (error) {
+      console.error('Error analyzing for task:', error);
+      throw error;
+    }
+  }
+
   async generateTitle(question) {
     try {
       const client = this.getClient();

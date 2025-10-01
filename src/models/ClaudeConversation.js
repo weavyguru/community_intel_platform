@@ -36,6 +36,23 @@ const claudeConversationSchema = new mongoose.Schema({
     model: String,
     timestamp: Date
   }],
+  suggestedTasks: [{
+    sourceId: String,
+    sourceContent: String,
+    sourceDeeplink: String,
+    platform: String,
+    author: String,
+    shouldEngage: Boolean,
+    score: Number,
+    reasoning: String,
+    suggestedResponse: String,
+    relevanceScore: Number,
+    status: { type: String, enum: ['pending', 'accepted', 'rejected', 'created'], default: 'pending' },
+    createdTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+    generatedAt: Date
+  }],
+  tasksGeneratedAt: Date,
+  tasksGeneratedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   isBookmarked: { type: Boolean, default: false }

@@ -224,6 +224,23 @@ app.get('/admin/bg-agent', auth, adminAuth, async (req, res) => {
   }
 });
 
+app.get('/admin/tasks-agent', auth, adminAuth, async (req, res) => {
+  try {
+    const Task = require('./src/models/Task');
+    const taskCount = await Task.countDocuments({ isCompleted: false });
+
+    res.render('admin/tasksAgent', {
+      title: 'Tasks Agent Configuration - Admin',
+      activePage: 'admin',
+      user: req.user,
+      taskCount
+    });
+  } catch (error) {
+    console.error('Admin tasks agent page error:', error);
+    res.status(500).send('Server error');
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).send('Page not found');

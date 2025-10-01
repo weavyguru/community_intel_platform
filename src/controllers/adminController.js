@@ -64,7 +64,7 @@ exports.getAgentConfig = async (req, res) => {
   try {
     const { type } = req.params;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
@@ -91,9 +91,9 @@ exports.getAgentConfig = async (req, res) => {
 exports.updateAgentConfig = async (req, res) => {
   try {
     const { type } = req.params;
-    const { instructions, searchFunctions, notificationSettings, changeNotes } = req.body;
+    const { instructions, valuePropositions, searchFunctions, notificationSettings, changeNotes } = req.body;
 
-    if (!['ask', 'background'].includes(type)) {
+    if (!['ask', 'background', 'create-tasks'].includes(type)) {
       return res.status(400).json({ error: 'Invalid agent type' });
     }
 
@@ -115,6 +115,7 @@ exports.updateAgentConfig = async (req, res) => {
       type,
       version: newVersion,
       instructions,
+      valuePropositions: valuePropositions || config.valuePropositions,
       searchFunctions: searchFunctions || config.searchFunctions,
       notificationSettings: notificationSettings || config.notificationSettings,
       createdBy: req.user._id,
@@ -123,6 +124,7 @@ exports.updateAgentConfig = async (req, res) => {
 
     // Update current config
     config.instructions = instructions;
+    if (valuePropositions !== undefined) config.valuePropositions = valuePropositions;
     if (searchFunctions) config.searchFunctions = searchFunctions;
     if (notificationSettings) config.notificationSettings = notificationSettings;
     config.currentVersion = newVersion;

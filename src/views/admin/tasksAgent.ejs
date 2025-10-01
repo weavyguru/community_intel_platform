@@ -1,0 +1,302 @@
+<div class="space-y-6">
+  <!-- Admin Navigation -->
+  <div class="bg-white rounded-lg shadow">
+    <nav class="flex space-x-4 p-4">
+      <a href="/admin/users" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Users
+      </a>
+      <a href="/admin/ask-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Ask Agent
+      </a>
+      <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Background Agent
+      </a>
+      <a href="/admin/tasks-agent" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700">
+        Tasks Agent
+      </a>
+    </nav>
+  </div>
+
+  <div class="flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Tasks Agent Configuration</h1>
+      <p class="mt-2 text-gray-600">Configure the AI that analyzes community posts to generate engagement tasks</p>
+    </div>
+    <div class="flex gap-2">
+      <sl-button onclick="loadVersionHistory()" variant="default">
+        <sl-icon slot="prefix" name="clock-history"></sl-icon>
+        Version History
+      </sl-button>
+      <sl-button id="saveButton" onclick="saveConfig()" variant="primary">
+        <sl-icon slot="prefix" name="save"></sl-icon>
+        Save Changes
+      </sl-button>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-6">
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Current Version: <span id="currentVersion" class="text-indigo-600">-</span>
+      </label>
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Last Updated: <span id="lastUpdated" class="text-gray-600">-</span>
+      </label>
+    </div>
+
+    <!-- Agent Instructions Editor -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Agent Instructions (Markdown)
+        <span class="text-gray-500 text-xs ml-2">Framework for analyzing posts and generating engagement tasks</span>
+      </label>
+      <div id="instructionsEditor" style="height: 400px; border: 1px solid #e5e7eb;"></div>
+    </div>
+
+    <!-- Weavy Context / Value Propositions Editor -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        Weavy Context / Value Propositions (Markdown)
+        <span class="text-gray-500 text-xs ml-2">Background information about Weavy that will be included in prompts</span>
+      </label>
+      <div id="valuePropsEditor" style="height: 400px; border: 1px solid #e5e7eb;"></div>
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Change Notes (Optional)</label>
+      <sl-textarea id="changeNotes" placeholder="Describe what changed in this version..." rows="2"></sl-textarea>
+    </div>
+
+    <!-- Preview Tabs -->
+    <div class="bg-gray-50 rounded-lg p-4">
+      <div class="flex space-x-4 mb-4 border-b border-gray-200">
+        <button id="previewInstructionsTab" onclick="showPreview('instructions')" class="px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600">
+          Instructions Preview
+        </button>
+        <button id="previewValuePropsTab" onclick="showPreview('valueProps')" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+          Value Props Preview
+        </button>
+      </div>
+      <div id="previewInstructions" class="prose prose-sm max-w-none bg-white p-4 rounded border border-gray-200"></div>
+      <div id="previewValueProps" class="hidden prose prose-sm max-w-none bg-white p-4 rounded border border-gray-200"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Version History Modal -->
+<sl-dialog id="versionHistoryModal" label="Version History" style="--width: 900px;">
+  <div id="versionHistoryContent">
+    <div class="text-center py-8">
+      <sl-spinner></sl-spinner>
+      <p class="mt-2 text-gray-500">Loading versions...</p>
+    </div>
+  </div>
+  <sl-button slot="footer" variant="default" onclick="document.getElementById('versionHistoryModal').hide()">
+    Close
+  </sl-button>
+</sl-dialog>
+
+<!-- Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+  let instructionsEditor;
+  let valuePropsEditor;
+  let currentConfig;
+
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+
+  require(['vs/editor/editor.main'], function () {
+    // Initialize Instructions Editor
+    instructionsEditor = monaco.editor.create(document.getElementById('instructionsEditor'), {
+      value: '',
+      language: 'markdown',
+      theme: 'vs-dark',
+      wordWrap: 'on',
+      minimap: { enabled: false },
+      lineNumbers: 'on',
+      automaticLayout: true
+    });
+
+    instructionsEditor.onDidChangeModelContent(() => {
+      updatePreview('instructions');
+      localStorage.setItem('tasksAgentInstructionsDraft', instructionsEditor.getValue());
+    });
+
+    // Initialize Value Props Editor
+    valuePropsEditor = monaco.editor.create(document.getElementById('valuePropsEditor'), {
+      value: '',
+      language: 'markdown',
+      theme: 'vs-dark',
+      wordWrap: 'on',
+      minimap: { enabled: false },
+      lineNumbers: 'on',
+      automaticLayout: true
+    });
+
+    valuePropsEditor.onDidChangeModelContent(() => {
+      updatePreview('valueProps');
+      localStorage.setItem('tasksAgentValuePropsDraft', valuePropsEditor.getValue());
+    });
+
+    // Load config after editors are ready
+    loadConfig();
+
+    // Check for drafts after config loads
+    checkForDraft();
+  });
+
+  async function loadConfig() {
+    try {
+      const response = await fetch('/api/admin/agent-config/create-tasks');
+      const data = await response.json();
+
+      if (data.success) {
+        currentConfig = data.config;
+        instructionsEditor.setValue(data.config.instructions || '');
+        valuePropsEditor.setValue(data.config.valuePropositions || '');
+        document.getElementById('currentVersion').textContent = `v${data.config.currentVersion}`;
+        document.getElementById('lastUpdated').textContent = new Date(data.config.lastUpdated).toLocaleString();
+        updatePreview('instructions');
+        updatePreview('valueProps');
+      }
+    } catch (error) {
+      console.error('Error loading config:', error);
+      alert('Error loading configuration');
+    }
+  }
+
+  function checkForDraft() {
+    const instructionsDraft = localStorage.getItem('tasksAgentInstructionsDraft');
+    const valuePropsDraft = localStorage.getItem('tasksAgentValuePropsDraft');
+
+    if (instructionsDraft && instructionsDraft !== instructionsEditor.getValue()) {
+      if (confirm('Found unsaved changes for instructions. Restore draft?')) {
+        instructionsEditor.setValue(instructionsDraft);
+      }
+    }
+
+    if (valuePropsDraft && valuePropsDraft !== valuePropsEditor.getValue()) {
+      if (confirm('Found unsaved changes for value propositions. Restore draft?')) {
+        valuePropsEditor.setValue(valuePropsDraft);
+      }
+    }
+  }
+
+  function updatePreview(type) {
+    const content = type === 'instructions' ? instructionsEditor.getValue() : valuePropsEditor.getValue();
+    const previewId = type === 'instructions' ? 'previewInstructions' : 'previewValueProps';
+    const html = marked.parse(content || '_No content_');
+    document.getElementById(previewId).innerHTML = html;
+  }
+
+  function showPreview(type) {
+    if (type === 'instructions') {
+      document.getElementById('previewInstructions').classList.remove('hidden');
+      document.getElementById('previewValueProps').classList.add('hidden');
+      document.getElementById('previewInstructionsTab').className = 'px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600';
+      document.getElementById('previewValuePropsTab').className = 'px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700';
+    } else {
+      document.getElementById('previewInstructions').classList.add('hidden');
+      document.getElementById('previewValueProps').classList.remove('hidden');
+      document.getElementById('previewInstructionsTab').className = 'px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700';
+      document.getElementById('previewValuePropsTab').className = 'px-4 py-2 text-sm font-medium text-indigo-600 border-b-2 border-indigo-600';
+    }
+  }
+
+  async function saveConfig() {
+    const saveButton = document.getElementById('saveButton');
+    saveButton.loading = true;
+
+    try {
+      const response = await fetch('/api/admin/agent-config/create-tasks', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instructions: instructionsEditor.getValue(),
+          valuePropositions: valuePropsEditor.getValue(),
+          changeNotes: document.getElementById('changeNotes').value
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        currentConfig = data.config;
+        document.getElementById('currentVersion').textContent = `v${data.config.currentVersion}`;
+        document.getElementById('lastUpdated').textContent = new Date(data.config.lastUpdated).toLocaleString();
+        document.getElementById('changeNotes').value = '';
+
+        // Clear drafts
+        localStorage.removeItem('tasksAgentInstructionsDraft');
+        localStorage.removeItem('tasksAgentValuePropsDraft');
+
+        alert('Configuration saved successfully!');
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      alert('Error saving configuration');
+    } finally {
+      saveButton.loading = false;
+    }
+  }
+
+  async function loadVersionHistory() {
+    const modal = document.getElementById('versionHistoryModal');
+    modal.show();
+
+    try {
+      const response = await fetch('/api/admin/agent-config/create-tasks/versions');
+      const data = await response.json();
+
+      if (data.success) {
+        const html = data.versions.map(v => `
+          <div class="border-b border-gray-200 py-4">
+            <div class="flex justify-between items-start mb-2">
+              <div>
+                <span class="text-lg font-semibold text-gray-900">Version ${v.version}</span>
+                ${v.version === currentConfig.currentVersion ? '<sl-badge variant="success" pill>Current</sl-badge>' : ''}
+              </div>
+              <div class="text-sm text-gray-500">${new Date(v.createdAt).toLocaleString()}</div>
+            </div>
+            ${v.changeNotes ? `<p class="text-sm text-gray-600 mb-2">${v.changeNotes}</p>` : ''}
+            <p class="text-xs text-gray-500">By: ${v.createdBy?.name || 'Unknown'}</p>
+            <div class="mt-2">
+              <sl-button size="small" onclick="restoreVersion(${v.version})">
+                <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+                Restore
+              </sl-button>
+            </div>
+          </div>
+        `).join('');
+
+        document.getElementById('versionHistoryContent').innerHTML = html || '<p class="text-center text-gray-500">No version history</p>';
+      }
+    } catch (error) {
+      console.error('Error loading versions:', error);
+      document.getElementById('versionHistoryContent').innerHTML = '<p class="text-center text-red-500">Error loading versions</p>';
+    }
+  }
+
+  async function restoreVersion(version) {
+    if (!confirm(`Restore to version ${version}? This will replace current content.`)) return;
+
+    try {
+      const response = await fetch(`/api/admin/agent-config/create-tasks/versions/${version}`);
+      const data = await response.json();
+
+      if (data.success) {
+        instructionsEditor.setValue(data.version.instructions);
+        valuePropsEditor.setValue(data.version.valuePropositions || '');
+        document.getElementById('versionHistoryModal').hide();
+        alert('Version restored! Click Save to apply changes.');
+      }
+    } catch (error) {
+      console.error('Restore error:', error);
+      alert('Error restoring version');
+    }
+  }
+</script>
