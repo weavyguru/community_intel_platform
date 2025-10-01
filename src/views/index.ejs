@@ -263,9 +263,13 @@
 
     // Get checked platforms
     const platformCheckboxes = document.querySelectorAll('.search-platform');
-    const platforms = Array.from(platformCheckboxes)
+    const allPlatforms = Array.from(platformCheckboxes).map(cb => cb.value);
+    const checkedPlatforms = Array.from(platformCheckboxes)
       .filter(cb => cb.checked)
       .map(cb => cb.value);
+
+    // If all platforms are checked, don't send filter (keep it simple for Chroma)
+    const platforms = checkedPlatforms.length === allPlatforms.length ? [] : checkedPlatforms;
 
     // Get checked types
     const typeCheckboxes = document.querySelectorAll('.search-type');
@@ -337,9 +341,13 @@
 
     // Get checked platforms
     const askPlatformCheckboxes = document.querySelectorAll('.ask-platform');
-    const platforms = Array.from(askPlatformCheckboxes)
+    const allPlatforms = Array.from(askPlatformCheckboxes).map(cb => cb.value);
+    const checkedPlatforms = Array.from(askPlatformCheckboxes)
       .filter(cb => cb.checked)
       .map(cb => cb.value);
+
+    // If all platforms are checked, don't send filter (keep it simple for Chroma)
+    const platforms = checkedPlatforms.length === allPlatforms.length ? [] : checkedPlatforms;
 
     // Get checked types
     const askTypeCheckboxes = document.querySelectorAll('.ask-type');
