@@ -9,240 +9,424 @@
         Ask Agent
       </a>
       <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700">
-        Background Agent
+        Intelligence Job
+      </a>
+      <a href="/admin/tasks-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Tasks Agent
       </a>
     </nav>
   </div>
 
   <div class="flex justify-between items-center">
     <div>
-      <h1 class="text-3xl font-bold text-gray-900">Background Agent Configuration</h1>
-      <p class="mt-2 text-gray-600">Configure the hourly intelligence monitoring agent</p>
+      <h1 class="text-3xl font-bold text-gray-900">Intelligence Job</h1>
+      <p class="mt-2 text-gray-600">Automated task generation running every 4 hours</p>
     </div>
     <div class="flex gap-2">
-      <sl-button onclick="runAgentNow()" variant="default">
+      <sl-button id="runJobBtn" variant="primary">
         <sl-icon slot="prefix" name="play-circle"></sl-icon>
         Run Now
       </sl-button>
-      <sl-button onclick="loadVersionHistory()" variant="default">
-        <sl-icon slot="prefix" name="clock-history"></sl-icon>
-        Version History
-      </sl-button>
-      <sl-button id="saveButton" onclick="saveConfig()" variant="primary">
-        <sl-icon slot="prefix" name="save"></sl-icon>
-        Save Changes
+      <sl-button id="refreshStatsBtn" variant="default">
+        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+        Refresh
       </sl-button>
     </div>
   </div>
 
+  <!-- Job Stats -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Total Runs</p>
+          <p id="totalRuns" class="text-2xl font-bold text-gray-900">-</p>
+        </div>
+        <sl-icon name="clock-history" class="text-4xl text-gray-400"></sl-icon>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Success Rate</p>
+          <p id="successRate" class="text-2xl font-bold text-green-600">-</p>
+        </div>
+        <sl-icon name="check-circle" class="text-4xl text-green-400"></sl-icon>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Total Tasks Created</p>
+          <p id="totalTasks" class="text-2xl font-bold text-indigo-600">-</p>
+        </div>
+        <sl-icon name="list-check" class="text-4xl text-indigo-400"></sl-icon>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium text-gray-600">Items Processed</p>
+          <p id="totalItems" class="text-2xl font-bold text-blue-600">-</p>
+        </div>
+        <sl-icon name="database" class="text-4xl text-blue-400"></sl-icon>
+      </div>
+    </div>
+  </div>
+
+  <!-- Current Status -->
   <div class="bg-white rounded-lg shadow p-6">
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">
-        Current Version: <span id="currentVersion" class="text-indigo-600">-</span>
-      </label>
-      <label class="block text-sm font-medium text-gray-700 mb-2">
-        Last Updated: <span id="lastUpdated" class="text-gray-600">-</span>
-      </label>
+    <h2 class="text-xl font-semibold mb-4">Configuration</h2>
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-gray-700">Job Status:</span>
+        <span id="jobStatus" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">-</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-gray-700">Last Successful Run:</span>
+        <span id="lastRun" class="text-sm text-gray-600">-</span>
+      </div>
+      <div class="border-t pt-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Run Interval (hours)</label>
+        <div class="flex items-center gap-2">
+          <sl-input id="intervalHours" type="number" min="1" max="24" value="4" style="width: 120px;"></sl-input>
+          <sl-button id="updateIntervalBtn" variant="primary" size="small">
+            <sl-icon slot="prefix" name="clock"></sl-icon>
+            Update Interval
+          </sl-button>
+        </div>
+        <p class="mt-1 text-xs text-gray-500">Job will run every N hours (1-24)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run History -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold">Run History</h2>
+      <sl-button id="refreshHistoryBtn" variant="default" size="small">
+        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+        Refresh History
+      </sl-button>
     </div>
 
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">Agent Instructions (Markdown)</label>
-      <div id="editor" style="height: 500px; border: 1px solid #e5e7eb;"></div>
-    </div>
-
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700 mb-2">Change Notes (Optional)</label>
-      <sl-textarea id="changeNotes" placeholder="Describe what changed in this version..." rows="2"></sl-textarea>
-    </div>
-
-    <div class="bg-gray-50 rounded-lg p-4 mb-4">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2">Preview</h3>
-      <div id="preview" class="prose prose-sm max-w-none bg-white p-4 rounded border border-gray-200"></div>
-    </div>
-
-    <!-- Notification Settings -->
-    <div class="border-t pt-6">
-      <h3 class="text-lg font-semibold mb-4">Notification Settings</h3>
-
-      <div class="space-y-4">
-        <div>
-          <sl-switch id="notificationsEnabled" checked>Enable Notifications</sl-switch>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Minimum Priority for Notifications</label>
-          <sl-select id="minPriority" value="medium">
-            <sl-option value="low">Low</sl-option>
-            <sl-option value="medium">Medium</sl-option>
-            <sl-option value="high">High</sl-option>
-          </sl-select>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Keywords (comma-separated)</label>
-          <sl-input id="keywords" placeholder="weavy, chat, collaboration, integration"></sl-input>
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Intents (comma-separated)</label>
-          <sl-input id="intents" placeholder="feature_request, bug_report, competitive_intel"></sl-input>
-        </div>
+    <div id="historyContainer">
+      <div class="text-center py-8 text-gray-500">
+        <sl-spinner></sl-spinner>
+        <p class="mt-2">Loading history...</p>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Monaco Editor -->
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Confirmation Dialog -->
+<sl-dialog id="runJobDialog" label="Run Intelligence Job">
+  <p>This will manually run the intelligence job and create tasks automatically.</p>
+  <p class="mt-2 text-sm text-gray-600">Are you sure you want to continue?</p>
+  <div slot="footer" class="flex gap-2 justify-end">
+    <sl-button id="cancelRunBtn" variant="default">Cancel</sl-button>
+    <sl-button id="confirmRunBtn" variant="primary">Run Job</sl-button>
+  </div>
+</sl-dialog>
 
 <script>
-  let editor;
-  let currentConfig;
+  let refreshInterval;
 
-  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+  // Socket.IO connection
+  const socket = io();
+  let isJobRunning = false;
+  let currentJobRow = null;
 
-  require(['vs/editor/editor.main'], function () {
-    editor = monaco.editor.create(document.getElementById('editor'), {
-      value: '',
-      language: 'markdown',
-      theme: 'vs-dark',
-      wordWrap: 'on',
-      minimap: { enabled: false },
-      lineNumbers: 'on',
-      automaticLayout: true
-    });
-
-    editor.onDidChangeModelContent(() => {
-      updatePreview();
-      localStorage.setItem('bgAgentDraft', editor.getValue());
-    });
-
-    // Load config after editor is ready
-    loadConfig();
-
-    // Check for draft after config loads
-    checkForDraft();
+  // Listen for job status updates
+  socket.on('job:status', (data) => {
+    console.log('Job status:', data);
+    updateRunningJobRow(data);
   });
 
-  async function loadConfig() {
+  // Load stats on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshStats();
+    loadHistory();
+
+    // Auto-refresh every 30 seconds
+    refreshInterval = setInterval(refreshStats, 30000);
+
+    // Attach event listeners
+    document.getElementById('runJobBtn').addEventListener('click', showRunJobDialog);
+    document.getElementById('refreshStatsBtn').addEventListener('click', refreshStats);
+    document.getElementById('refreshHistoryBtn').addEventListener('click', loadHistory);
+    document.getElementById('updateIntervalBtn').addEventListener('click', updateInterval);
+    document.getElementById('cancelRunBtn').addEventListener('click', hideRunJobDialog);
+    document.getElementById('confirmRunBtn').addEventListener('click', confirmRunJob);
+  });
+
+  async function refreshStats() {
     try {
-      const response = await fetch('/api/admin/agent-config/background');
+      const response = await fetch('/api/admin/job/stats');
       const data = await response.json();
 
       if (data.success) {
-        currentConfig = data.config;
-        editor.setValue(data.config.instructions);
-        document.getElementById('currentVersion').textContent = data.config.currentVersion;
-        document.getElementById('lastUpdated').textContent = new Date(data.config.lastUpdated).toLocaleString();
+        const stats = data.stats;
 
-        // Load notification settings
-        if (data.config.notificationSettings) {
-          document.getElementById('notificationsEnabled').checked = data.config.notificationSettings.enabled;
-          document.getElementById('minPriority').value = data.config.notificationSettings.minPriority;
-          document.getElementById('keywords').value = data.config.notificationSettings.keywords?.join(', ') || '';
-          document.getElementById('intents').value = data.config.notificationSettings.intents?.join(', ') || '';
+        document.getElementById('totalRuns').textContent = stats.totalRuns;
+        document.getElementById('totalTasks').textContent = stats.totalTasksCreated;
+        document.getElementById('totalItems').textContent = stats.totalItemsProcessed;
+        document.getElementById('intervalHours').value = stats.intervalHours || 4;
+
+        const successRate = stats.totalRuns > 0
+          ? Math.round((stats.successfulRuns / stats.totalRuns) * 100)
+          : 0;
+        document.getElementById('successRate').textContent = successRate + '%';
+
+        const statusEl = document.getElementById('jobStatus');
+        if (stats.isRunning) {
+          statusEl.textContent = 'Running';
+          statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+        } else {
+          statusEl.textContent = 'Idle';
+          statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
         }
 
-        updatePreview();
-        localStorage.removeItem('bgAgentDraft');
+        if (stats.lastSuccessfulRun) {
+          const lastRun = new Date(stats.lastSuccessfulRun);
+          document.getElementById('lastRun').textContent = lastRun.toLocaleString();
+        } else {
+          document.getElementById('lastRun').textContent = 'Never';
+        }
       }
     } catch (error) {
-      console.error('Error loading config:', error);
-      // Silently log error, don't alert
+      console.error('Error loading stats:', error);
     }
   }
 
-  function checkForDraft() {
-    const draft = localStorage.getItem('bgAgentDraft');
-    if (draft && editor && confirm('You have unsaved changes. Would you like to restore them?')) {
-      editor.setValue(draft);
-    }
-  }
-
-  function updatePreview() {
-    if (!window.marked || !editor) return;
+  async function loadHistory() {
+    const container = document.getElementById('historyContainer');
+    container.innerHTML = '<div class="text-center py-8 text-gray-500"><sl-spinner></sl-spinner><p class="mt-2">Loading history...</p></div>';
 
     try {
-      const markdown = editor.getValue();
-      const html = marked.parse(markdown);
-      document.getElementById('preview').innerHTML = html;
-    } catch (error) {
-      console.error('Error updating preview:', error);
-    }
-  }
-
-  async function saveConfig() {
-    const instructions = editor.getValue();
-    const changeNotes = document.getElementById('changeNotes').value;
-
-    if (!instructions.trim()) {
-      alert('Instructions cannot be empty');
-      return;
-    }
-
-    const notificationSettings = {
-      enabled: document.getElementById('notificationsEnabled').checked,
-      minPriority: document.getElementById('minPriority').value,
-      keywords: document.getElementById('keywords').value.split(',').map(k => k.trim()).filter(k => k),
-      intents: document.getElementById('intents').value.split(',').map(i => i.trim()).filter(i => i)
-    };
-
-    const saveButton = document.getElementById('saveButton');
-    saveButton.loading = true;
-
-    try {
-      const response = await fetch('/api/admin/agent-config/background', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instructions, notificationSettings, changeNotes })
-      });
-
+      const response = await fetch('/api/admin/job/history');
       const data = await response.json();
 
-      if (data.success) {
-        alert(`Configuration saved successfully! New version: ${data.version}`);
-        document.getElementById('changeNotes').value = '';
-        await loadConfig();
+      if (data.success && data.history.length > 0) {
+        container.innerHTML = `
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Found in Chroma</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">After Dedup</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tasks Created</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Conversation</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                ${data.history.map(run => {
+                  const time = new Date(run.timestamp).toLocaleString();
+                  const duration = run.result?.duration ? (run.result.duration / 1000).toFixed(1) + 's' : '-';
+                  const statusBadge = run.success
+                    ? '<span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Success</span>'
+                    : '<span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Failed</span>';
+                  const conversationLink = run.result?.conversationId
+                    ? `<a href="/api/conversations/${run.result.conversationId}" target="_blank" class="text-indigo-600 hover:underline">View</a>`
+                    : '-';
+
+                  const foundInChroma = run.result?.processed || '-';
+                  const afterDedup = run.result?.analyzed || '-';
+
+                  return `
+                    <tr>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${time}</td>
+                      <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${foundInChroma}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${afterDedup}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${run.result?.tasksCreated || '-'}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${duration}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm">${conversationLink}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
       } else {
-        alert(data.error || 'Error saving configuration');
+        // Show empty table so Socket.IO updates can add live rows
+        container.innerHTML = `
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Found in Chroma</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">After Dedup</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tasks Created</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Conversation</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td colspan="7" class="px-6 py-8 text-center text-gray-500">No run history available</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        `;
       }
     } catch (error) {
-      console.error('Error saving config:', error);
-      alert('Error saving configuration');
-    } finally {
-      saveButton.loading = false;
+      console.error('Error loading history:', error);
+      container.innerHTML = '<div class="text-center py-8 text-red-500">Error loading history</div>';
     }
   }
 
-  async function runAgentNow() {
-    if (!confirm('This will manually run the background intelligence agent. Continue?')) {
-      return;
+  function showRunJobDialog() {
+    const dialog = document.getElementById('runJobDialog');
+    dialog.show();
+  }
+
+  function hideRunJobDialog() {
+    const dialog = document.getElementById('runJobDialog');
+    dialog.hide();
+  }
+
+  function updateRunningJobRow(statusData) {
+    const container = document.getElementById('historyContainer');
+
+    if (!isJobRunning) {
+      isJobRunning = true;
+
+      // Create a live row at the top
+      const table = container.querySelector('table');
+      if (table) {
+        const tbody = table.querySelector('tbody');
+
+        // Remove "No run history" placeholder row if it exists
+        const placeholderRow = tbody.querySelector('td[colspan="7"]');
+        if (placeholderRow && placeholderRow.parentElement) {
+          placeholderRow.parentElement.remove();
+        }
+
+        currentJobRow = document.createElement('tr');
+        currentJobRow.className = 'bg-blue-50';
+        currentJobRow.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+            <sl-spinner style="font-size: 1rem; --track-width: 2px;"></sl-spinner>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span id="liveStatus" class="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 truncate inline-block" style="max-width: 250px;" title="${statusData.detail || statusData.message}">
+              ${statusData.message}
+            </span>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
+        `;
+        tbody.insertBefore(currentJobRow, tbody.firstChild);
+      }
+    } else if (currentJobRow) {
+      // Update the status column
+      const statusCell = currentJobRow.querySelector('#liveStatus');
+      if (statusCell) {
+        const displayText = statusData.detail || statusData.message;
+        statusCell.textContent = statusData.message;
+        statusCell.title = displayText;
+      }
     }
+  }
+
+  function clearRunningJobRow() {
+    if (currentJobRow && currentJobRow.parentNode) {
+      currentJobRow.remove();
+    }
+    currentJobRow = null;
+    isJobRunning = false;
+  }
+
+  async function confirmRunJob() {
+    const dialog = document.getElementById('runJobDialog');
+    const confirmButton = document.getElementById('confirmRunBtn');
+    const runButton = document.getElementById('runJobBtn');
+
+    dialog.hide();
+    runButton.loading = true;
+    confirmButton.loading = true;
+
+    // Reset job tracking
+    clearRunningJobRow();
 
     try {
       const response = await fetch('/api/admin/agent/run', { method: 'POST' });
       const data = await response.json();
 
       if (data.success) {
-        alert(`Agent ran successfully!\nProcessed: ${data.result.processed} items\nTasks created: ${data.result.tasksCreated}\nNotifications sent: ${data.result.notificationsSent}`);
+        const result = data.result;
+        showToast(
+          `Job completed successfully!\n\nProcessed: ${result.processed} items\nAnalyzed: ${result.analyzed} items\nTasks Created: ${result.tasksCreated}\nConversation ID: ${result.conversationId}`,
+          'success',
+          'check-circle',
+          8000
+        );
+
+        // Refresh stats and history
+        clearRunningJobRow();
+        await refreshStats();
+        await loadHistory();
       } else {
-        alert('Error running agent');
+        clearRunningJobRow();
+        showToast(data.error || 'Error running job', 'danger', 'exclamation-triangle');
       }
     } catch (error) {
-      console.error('Error running agent:', error);
-      alert('Error running agent');
+      console.error('Error running job:', error);
+      clearRunningJobRow();
+      showToast('Error running job: ' + error.message, 'danger', 'exclamation-triangle');
+    } finally {
+      runButton.loading = false;
+      confirmButton.loading = false;
     }
   }
 
-  function loadVersionHistory() {
-    window.location.href = '/admin/agent-config/background/versions';
+  async function updateInterval() {
+    const hours = parseInt(document.getElementById('intervalHours').value);
+
+    if (!hours || hours < 1 || hours > 24) {
+      showToast('Interval must be between 1 and 24 hours', 'warning', 'exclamation-triangle');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/job/interval', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hours })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast(`Interval updated to ${hours} hours`, 'success', 'check-circle');
+        await refreshStats();
+      } else {
+        showToast(data.error || 'Error updating interval', 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Error updating interval:', error);
+      showToast('Error updating interval', 'danger', 'exclamation-triangle');
+    }
   }
 
-  // Auto-save draft every 30 seconds
-  setInterval(() => {
-    if (editor) {
-      localStorage.setItem('bgAgentDraft', editor.getValue());
+  // Cleanup interval on page unload
+  window.addEventListener('beforeunload', () => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
     }
-  }, 30000);
+  });
 </script>

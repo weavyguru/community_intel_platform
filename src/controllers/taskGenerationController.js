@@ -55,6 +55,7 @@ exports.generateTasks = async (req, res) => {
     const sourcesToAnalyze = uniqueSources;
 
     const suggestedTasks = [];
+    const analysisReport = [];
     let processedCount = 0;
 
     // Emit initial status
@@ -96,7 +97,24 @@ exports.generateTasks = async (req, res) => {
         // Parse the response
         const taskAnalysis = parseTaskAnalysisResponse(response);
 
-        // Only add if should engage
+        // Add to analysis report (ALL sources, not just engaged ones)
+        if (taskAnalysis) {
+          analysisReport.push({
+            sourceId: source.id,
+            platform: source.platform,
+            author: source.author,
+            contentSnippet: source.content ? source.content.substring(0, 200) : '',
+            sourceDeeplink: source.deeplink,
+            score: taskAnalysis.score,
+            shouldEngage: taskAnalysis.shouldEngage,
+            reasoning: taskAnalysis.reasoning,
+            isComment: source.metadata?.is_comment || false,
+            relevanceScore: source.relevanceScore,
+            analyzedAt: new Date()
+          });
+        }
+
+        // Only add to suggested tasks if should engage
         if (taskAnalysis && taskAnalysis.shouldEngage) {
           suggestedTasks.push({
             sourceId: source.id,
@@ -121,8 +139,9 @@ exports.generateTasks = async (req, res) => {
       }
     }
 
-    // Save suggested tasks to conversation
+    // Save suggested tasks and analysis report to conversation
     conversation.suggestedTasks = suggestedTasks;
+    conversation.taskGenerationReport = analysisReport;
     conversation.tasksGeneratedAt = new Date();
     conversation.tasksGeneratedBy = req.user._id;
     await conversation.save();
@@ -189,17 +208,31 @@ exports.createTaskFromSuggestion = async (req, res) => {
 
     const mappedPlatform = platformMap[suggestedTask.platform?.toLowerCase()] || 'Discord';
 
+    // Generate AI title if not provided
+    let taskTitle = title;
+    if (!taskTitle) {
+      try {
+        const contentForTitle = suggestedTask.sourceContent || suggestedTask.reasoning || '';
+        const titlePrompt = `${suggestedTask.author} on ${suggestedTask.platform}: ${contentForTitle.substring(0, 200)}`;
+        taskTitle = await claudeService.generateTitle(titlePrompt);
+      } catch (error) {
+        console.error('Error generating task title:', error);
+        // Fallback to original format
+        taskTitle = `${suggestedTask.platform} - ${suggestedTask.author}`;
+      }
+    }
+
     // Create the actual task
     const task = await Task.create({
-      title: title || `${suggestedTask.platform} - ${suggestedTask.author}`,
+      title: taskTitle,
       snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
       sourceUrl: suggestedTask.sourceDeeplink || '#',
       platform: mappedPlatform,
       intent: 'engagement',
       priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
+      suggestedResponse: suggestedTask.suggestedResponse,
       metadata: {
         author: suggestedTask.author,
-        suggestedResponse: suggestedTask.suggestedResponse,
         reasoning: suggestedTask.reasoning,
         conversationId: conversation._id,
         originalPlatform: suggestedTask.platform
@@ -210,6 +243,13 @@ exports.createTaskFromSuggestion = async (req, res) => {
     conversation.suggestedTasks[parseInt(taskIndex)].status = 'created';
     conversation.suggestedTasks[parseInt(taskIndex)].createdTaskId = task._id;
     await conversation.save();
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:created', {
+        taskId: task._id.toString()
+      });
+    }
 
     res.json({
       success: true,

@@ -7,6 +7,7 @@ const adminAuth = require('../middleware/adminAuth');
 // User management
 router.get('/users', auth, adminAuth, adminController.getUsers);
 router.put('/users/:id/role', auth, adminAuth, adminController.updateUserRole);
+router.delete('/users/:id', auth, adminAuth, adminController.deleteUser);
 
 // Agent configuration
 router.get('/agent-config/:type', auth, adminAuth, adminController.getAgentConfig);
@@ -16,7 +17,10 @@ router.get('/agent-config/:type/version/:versionNumber', auth, adminAuth, adminC
 router.post('/agent-config/:type/restore/:versionNumber', auth, adminAuth, adminController.restoreVersion);
 router.get('/agent-config/:type/diff/:v1/:v2', auth, adminAuth, adminController.compareVersions);
 
-// Background agent
+// Intelligence job
 router.post('/agent/run', auth, adminAuth, adminController.runBackgroundAgent);
+router.get('/job/stats', auth, adminAuth, adminController.getJobStats);
+router.get('/job/history', auth, adminAuth, adminController.getJobHistory);
+router.put('/job/interval', auth, adminAuth, adminController.updateJobInterval);
 
 module.exports = router;

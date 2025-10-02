@@ -10,6 +10,9 @@ const taskSchema = new mongoose.Schema({
   isCompleted: { type: Boolean, default: false },
   completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   completedAt: Date,
+  delegatedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  delegatedAt: Date,
+  suggestedResponse: String,
   metadata: {
     author: String,
     timestamp: Date,

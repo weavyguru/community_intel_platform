@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { AgentConfig, AgentConfigVersion } = require('../models/AgentConfig');
-const backgroundAgent = require('../services/backgroundAgent');
+const intelligenceJob = require('../jobs/intelligenceJob');
 
 // @desc    Get all users
 // @route   GET /api/admin/users
@@ -54,6 +54,34 @@ exports.updateUserRole = async (req, res) => {
   } catch (error) {
     console.error('Update user role error:', error);
     res.status(500).json({ error: 'Error updating user role' });
+  }
+};
+
+// @desc    Delete user
+// @route   DELETE /api/admin/users/:id
+// @access  Private/Admin
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Prevent deleting own account
+    if (user._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Error deleting user' });
   }
 };
 
@@ -320,19 +348,77 @@ exports.compareVersions = async (req, res) => {
   }
 };
 
-// @desc    Manually run background agent
+// @desc    Manually run intelligence job
 // @route   POST /api/admin/agent/run
 // @access  Private/Admin
 exports.runBackgroundAgent = async (req, res) => {
   try {
-    const result = await backgroundAgent.runIntelligenceCheck();
+    const result = await intelligenceJob.runManually();
 
     res.json({
       success: true,
       result
     });
   } catch (error) {
-    console.error('Run background agent error:', error);
-    res.status(500).json({ error: 'Error running background agent' });
+    console.error('Run intelligence job error:', error);
+    res.status(500).json({ error: 'Error running intelligence job' });
+  }
+};
+
+// @desc    Get intelligence job stats
+// @route   GET /api/admin/job/stats
+// @access  Private/Admin
+exports.getJobStats = async (req, res) => {
+  try {
+    const stats = intelligenceJob.getStats();
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Get job stats error:', error);
+    res.status(500).json({ error: 'Error getting job stats' });
+  }
+};
+
+// @desc    Get intelligence job run history
+// @route   GET /api/admin/job/history
+// @access  Private/Admin
+exports.getJobHistory = async (req, res) => {
+  try {
+    const history = await intelligenceJob.getHistory();
+
+    res.json({
+      success: true,
+      history
+    });
+  } catch (error) {
+    console.error('Get job history error:', error);
+    res.status(500).json({ error: 'Error getting job history' });
+  }
+};
+
+// @desc    Update intelligence job interval
+// @route   PUT /api/admin/job/interval
+// @access  Private/Admin
+exports.updateJobInterval = async (req, res) => {
+  try {
+    const { hours } = req.body;
+
+    if (!hours || hours < 1 || hours > 24) {
+      return res.status(400).json({ error: 'Interval must be between 1 and 24 hours' });
+    }
+
+    intelligenceJob.updateInterval(hours);
+
+    res.json({
+      success: true,
+      message: `Job interval updated to ${hours} hours`,
+      intervalHours: hours
+    });
+  } catch (error) {
+    console.error('Update job interval error:', error);
+    res.status(500).json({ error: 'Error updating job interval' });
   }
 };

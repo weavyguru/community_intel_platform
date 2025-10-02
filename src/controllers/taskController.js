@@ -1,4 +1,6 @@
 const Task = require('../models/Task');
+const User = require('../models/User');
+const emailService = require('../services/emailService');
 
 // @desc    Get all tasks with filters
 // @route   GET /api/tasks
@@ -36,7 +38,8 @@ exports.getTasks = async (req, res) => {
       .sort({ priority: -1, createdAt: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(skip))
-      .populate('completedBy', 'name email');
+      .populate('completedBy', 'name email')
+      .populate('delegatedTo', 'name email');
 
     const total = await Task.countDocuments(query);
 
@@ -69,13 +72,49 @@ exports.getTaskCount = async (req, res) => {
   }
 };
 
+// @desc    Get task statistics
+// @route   GET /api/tasks/stats
+// @access  Private
+exports.getTaskStats = async (req, res) => {
+  try {
+    const openCount = await Task.countDocuments({ isCompleted: false });
+
+    // Get completed today count
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const completedTodayCount = await Task.countDocuments({
+      isCompleted: true,
+      completedAt: { $gte: startOfDay }
+    });
+
+    // Get high priority count
+    const highPriorityCount = await Task.countDocuments({
+      isCompleted: false,
+      priority: 'high'
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        open: openCount,
+        completedToday: completedTodayCount,
+        highPriority: highPriorityCount
+      }
+    });
+  } catch (error) {
+    console.error('Get task stats error:', error);
+    res.status(500).json({ error: 'Error retrieving task stats' });
+  }
+};
+
 // @desc    Get single task
 // @route   GET /api/tasks/:id
 // @access  Private
 exports.getTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
-      .populate('completedBy', 'name email');
+      .populate('completedBy', 'name email')
+      .populate('delegatedTo', 'name email');
 
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
@@ -108,6 +147,14 @@ exports.completeTask = async (req, res) => {
     await task.save();
 
     await task.populate('completedBy', 'name email');
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:updated', {
+        taskId: task._id.toString(),
+        isCompleted: true
+      });
+    }
 
     res.json({
       success: true,
@@ -195,5 +242,74 @@ exports.updatePriority = async (req, res) => {
   } catch (error) {
     console.error('Update priority error:', error);
     res.status(500).json({ error: 'Error updating task priority' });
+  }
+};
+
+// @desc    Delegate task to user
+// @route   PUT /api/tasks/:id/delegate
+// @access  Private
+exports.delegateTask = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    task.delegatedTo = userId;
+    task.delegatedAt = Date.now();
+    await task.save();
+
+    await task.populate('delegatedTo', 'name email');
+
+    // Send delegation email
+    await emailService.sendTaskDelegationEmail(task, user);
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:delegated', {
+        taskId: task._id.toString(),
+        delegatedTo: {
+          _id: user._id,
+          name: user.name,
+          email: user.email
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    console.error('Delegate task error:', error);
+    res.status(500).json({ error: 'Error delegating task: ' + error.message });
+  }
+};
+
+// @desc    Get all users
+// @route   GET /api/users
+// @access  Private
+exports.getUsers = async (req, res) => {
+  try {
+    const users = await User.find({}, 'name email role').sort({ name: 1 });
+
+    res.json({
+      success: true,
+      users
+    });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: 'Error retrieving users' });
   }
 };

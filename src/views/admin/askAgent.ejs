@@ -9,7 +9,10 @@
         Ask Agent
       </a>
       <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
-        Background Agent
+        Intelligence Job
+      </a>
+      <a href="/admin/tasks-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Tasks Agent
       </a>
     </nav>
   </div>
@@ -134,7 +137,7 @@
     const changeNotes = document.getElementById('changeNotes').value;
 
     if (!instructions.trim()) {
-      alert('Instructions cannot be empty');
+      showToast('Instructions cannot be empty', 'warning', 'exclamation-triangle');
       return;
     }
 
@@ -151,15 +154,15 @@
       const data = await response.json();
 
       if (data.success) {
-        alert(`Configuration saved successfully! New version: ${data.version}`);
+        showToast(`Configuration saved successfully! New version: ${data.version}`, 'success', 'check-circle');
         document.getElementById('changeNotes').value = '';
         await loadConfig();
       } else {
-        alert(data.error || 'Error saving configuration');
+        showToast(data.error || 'Error saving configuration', 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       console.error('Error saving config:', error);
-      alert('Error saving configuration');
+      showToast('Error saving configuration', 'danger', 'exclamation-triangle');
     } finally {
       saveButton.loading = false;
     }

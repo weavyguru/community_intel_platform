@@ -29,6 +29,65 @@
     <%- body %>
   </main>
 
+  <script>
+    // Global toast notification helper using Shoelace native
+    function showToast(message, variant = 'primary', icon = 'info-circle', duration = 3000) {
+      const alert = Object.assign(document.createElement('sl-alert'), {
+        variant: variant,
+        closable: true,
+        duration: duration,
+        style: 'position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; min-width: 300px; max-width: 500px;'
+      });
+
+      alert.innerHTML = `
+        <sl-icon name="${icon}" slot="icon"></sl-icon>
+        ${message}
+      `;
+
+      document.body.append(alert);
+      alert.toast();
+    }
+
+    // Global function to update task count badge
+    async function updateTaskCountBadge() {
+      try {
+        const response = await fetch('/api/tasks/count');
+        const data = await response.json();
+
+        if (data.success) {
+          const taskLink = document.querySelector('a[href="/tasks"]');
+          if (taskLink) {
+            let badge = taskLink.querySelector('span.bg-red-500');
+
+            if (data.count > 0) {
+              if (badge) {
+                badge.textContent = data.count;
+              } else {
+                const newBadge = document.createElement('span');
+                newBadge.className = 'ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-0.5';
+                newBadge.textContent = data.count;
+                taskLink.appendChild(newBadge);
+              }
+            } else {
+              if (badge) {
+                badge.remove();
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error updating task count:', error);
+      }
+    }
+
+    // Socket.IO listener for task updates (if on a page with socket)
+    if (typeof io !== 'undefined') {
+      const globalSocket = io();
+      globalSocket.on('task:created', () => updateTaskCountBadge());
+      globalSocket.on('task:updated', () => updateTaskCountBadge());
+    }
+  </script>
+
   <script src="/js/app.js"></script>
 </body>
 </html>

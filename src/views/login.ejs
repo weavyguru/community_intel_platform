@@ -66,6 +66,32 @@
   </div>
 
   <script>
+    // Global toast notification helper using Shoelace native
+    function showToast(message, variant = 'primary', icon = 'info-circle', duration = 3000) {
+      const alert = Object.assign(document.createElement('sl-alert'), {
+        variant: variant,
+        closable: true,
+        duration: duration,
+        style: 'position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; min-width: 300px; max-width: 500px;'
+      });
+
+      alert.innerHTML = `
+        <sl-icon name="${icon}" slot="icon"></sl-icon>
+        ${message}
+      `;
+
+      document.body.append(alert);
+      alert.toast();
+    }
+
+    // Check if email was just verified
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('verified') === 'true') {
+      showToast('Email verified successfully! You can now log in.', 'success', 'check-circle', 5000);
+      // Remove the query parameter from URL
+      window.history.replaceState({}, document.title, '/login');
+    }
+
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -84,11 +110,11 @@
         if (data.success) {
           window.location.href = '/';
         } else {
-          alert(data.error || 'Login failed');
+          showToast(data.error || 'Login failed', 'danger', 'exclamation-triangle');
         }
       } catch (error) {
         console.error('Login error:', error);
-        alert('An error occurred during login');
+        showToast('An error occurred during login', 'danger', 'exclamation-triangle');
       }
     });
   </script>

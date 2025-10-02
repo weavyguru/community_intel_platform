@@ -9,7 +9,10 @@
         Ask Agent
       </a>
       <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
-        Background Agent
+        Intelligence Job
+      </a>
+      <a href="/admin/tasks-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+        Tasks Agent
       </a>
     </nav>
   </div>
@@ -37,6 +40,7 @@
 
       if (data.success) {
         renderUsers(data.users);
+        setupEventListeners();
       } else {
         usersList.innerHTML = '<p class="text-red-600 text-center">Error loading users</p>';
       }
@@ -44,6 +48,24 @@
       console.error('Error loading users:', error);
       usersList.innerHTML = '<p class="text-red-600 text-center">Error loading users</p>';
     }
+  }
+
+  function setupEventListeners() {
+    document.querySelectorAll('sl-menu-item[data-action]').forEach(item => {
+      item.addEventListener('click', (e) => {
+        const action = e.target.dataset.action;
+        const userId = e.target.dataset.userId;
+        const userEmail = e.target.dataset.userEmail;
+
+        if (action === 'make-admin') {
+          changeUserRole(userId, 'admin');
+        } else if (action === 'make-user') {
+          changeUserRole(userId, 'user');
+        } else if (action === 'remove') {
+          removeUser(userId, userEmail);
+        }
+      });
+    });
   }
 
   function renderUsers(users) {
@@ -88,11 +110,15 @@
                   <sl-dropdown>
                     <sl-button slot="trigger" size="small" caret>Actions</sl-button>
                     <sl-menu>
-                      <sl-menu-item onclick="changeUserRole('${user._id}', 'admin')" ${user.role === 'admin' ? 'disabled' : ''}>
+                      <sl-menu-item data-action="make-admin" data-user-id="${user._id}" ${user.role === 'admin' ? 'disabled' : ''}>
                         Make Admin
                       </sl-menu-item>
-                      <sl-menu-item onclick="changeUserRole('${user._id}', 'user')" ${user.role === 'user' ? 'disabled' : ''}>
+                      <sl-menu-item data-action="make-user" data-user-id="${user._id}" ${user.role === 'user' ? 'disabled' : ''}>
                         Make User
+                      </sl-menu-item>
+                      <sl-divider></sl-divider>
+                      <sl-menu-item data-action="remove" data-user-id="${user._id}" data-user-email="${user.email}" style="color: var(--sl-color-danger-600);">
+                        Remove
                       </sl-menu-item>
                     </sl-menu>
                   </sl-dropdown>
@@ -120,14 +146,38 @@
       const data = await response.json();
 
       if (data.success) {
-        alert('User role updated successfully');
+        showToast('User role updated successfully', 'success', 'check-circle');
         loadUsers();
       } else {
-        alert(data.error || 'Error updating user role');
+        showToast(data.error || 'Error updating user role', 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       console.error('Error updating user role:', error);
-      alert('Error updating user role');
+      showToast('Error updating user role', 'danger', 'exclamation-triangle');
+    }
+  }
+
+  async function removeUser(userId, userEmail) {
+    if (!confirm(`Are you sure you want to remove ${userEmail}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('User removed successfully', 'success', 'check-circle');
+        loadUsers();
+      } else {
+        showToast(data.error || 'Error removing user', 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Error removing user:', error);
+      showToast('Error removing user', 'danger', 'exclamation-triangle');
     }
   }
 

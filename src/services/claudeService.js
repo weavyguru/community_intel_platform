@@ -245,58 +245,63 @@ If no action needed, respond: {"needsAction": false}`;
     }
   }
 
-  async analyzeSearchIntent(question, availablePlatforms) {
+  async evaluateSearchResults(question, currentResults, searchPlan, iteration) {
     try {
       const client = this.getClient();
 
-      const systemPrompt = `You are a search query generator. Analyze the user's question and generate the optimal search queries to answer it.
+      const systemPrompt = `You are an expert search analyst. Evaluate search results and determine if additional searches are needed to comprehensively answer the user's question.`;
 
-Available platforms: ${availablePlatforms.join(', ')}
+      // Build summary of current results
+      const platformCounts = {};
+      currentResults.forEach(result => {
+        const platform = result.metadata?.platform || 'unknown';
+        platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+      });
 
-Respond ONLY with valid JSON in this exact format:
+      const resultsSummary = {
+        totalResults: currentResults.length,
+        platformDistribution: platformCounts,
+        iteration: iteration
+      };
+
+      const userMessage = `Evaluate these search results for completeness:
+
+Original Question: "${question}"
+
+Current Results Summary:
+- Total results: ${resultsSummary.totalResults}
+- Platform distribution: ${JSON.stringify(resultsSummary.platformDistribution, null, 2)}
+- Current iteration: ${resultsSummary.iteration}
+- Target minimum results: ${searchPlan.coverageGoals?.minimumResults || 25}
+
+Original Search Plan:
+- Query complexity: ${searchPlan.queryComplexity}
+- Expected iterations: ${searchPlan.expectedIterations}
+- Coverage goals: ${JSON.stringify(searchPlan.coverageGoals, null, 2)}
+
+Sample of results (first 3):
+${currentResults.slice(0, 3).map((r, i) => `${i + 1}. Platform: ${r.metadata?.platform}, Content: ${r.content.substring(0, 150)}...`).join('\n')}
+
+Respond ONLY with valid JSON:
 {
-  "searchQueries": [
+  "isComplete": true/false,
+  "confidence": 0-100,
+  "coverageGaps": ["gap1", "gap2"],
+  "reasoning": "detailed explanation",
+  "recommendedQueries": [
     {
-      "query": "optimized search query text",
-      "platforms": ["platform1", "platform2"] or null,
-      "reason": "why this specific query"
+      "query": "follow-up query text",
+      "platforms": ["platform"] or null,
+      "reason": "why this query fills gaps",
+      "searchType": "broad|specific|comparative|sentiment"
     }
-  ],
-  "reasoning": "overall strategy explanation"
-}
-
-Rules:
-- Generate AS MANY search queries as needed to comprehensively answer the question
-- For cross-platform comparative questions (e.g., "across all platforms", "compare platforms"):
-  * Create ONE search query per platform with that platform in the "platforms" array
-  * Use the same core search term for each platform to enable fair comparison
-  * Extract the core topic/issue from the question
-- For platform-specific questions:
-  * Specify the platform(s) in the "platforms" array
-- For general questions:
-  * Use "platforms": null to search all data
-- Optimize the query text for semantic search (remove filler words, focus on key concepts)`;
-
-      const userMessage = `Generate search queries for this question:
-
-Question: "${question}"
-
-Available platforms: ${availablePlatforms.join(', ')}
-Total platforms: ${availablePlatforms.length}
-
-Examples:
-1. "What is the most common issue across platforms?" → Generate ${availablePlatforms.length} queries (one per platform) with core search: "common issue" or "problem" or "error"
-   - Query 1: {"query": "common issue", "platforms": ["${availablePlatforms[0]}"], "reason": "..."}
-   - Query 2: {"query": "common issue", "platforms": ["${availablePlatforms[1]}"], "reason": "..."}
-   - ... (one for each available platform)
-2. "How do users feel about Lovable?" → Generate 1 query with platforms: ["lovable"]
-3. "What are people saying about pricing?" → Generate 1 query with platforms: null
-
-Respond with ONLY the JSON object.`;
+  ]
+}`;
 
       const response = await client.messages.create({
-        model: 'claude-3-5-haiku-20241022',
+        model: this.model, // Use Sonnet 4.5
         max_tokens: 1500,
+        system: systemPrompt,
         messages: [{
           role: 'user',
           content: userMessage
@@ -304,27 +309,122 @@ Respond with ONLY the JSON object.`;
       });
 
       const jsonText = response.content[0].text.trim();
-      console.log('Raw Haiku response:', jsonText);
+      const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleanJson);
+
+      console.log('Search evaluation:', JSON.stringify(parsed, null, 2));
+
+      return {
+        ...parsed,
+        usage: response.usage
+      };
+    } catch (error) {
+      console.error('Error evaluating search results:', error);
+      // Default to complete if evaluation fails
+      return {
+        isComplete: true,
+        confidence: 50,
+        coverageGaps: [],
+        reasoning: 'Evaluation failed, proceeding with current results',
+        recommendedQueries: []
+      };
+    }
+  }
+
+  async analyzeSearchIntent(question, availablePlatforms) {
+    try {
+      const client = this.getClient();
+
+      const systemPrompt = `You are an expert search strategist using Claude Opus 4. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
+
+Available platforms: ${availablePlatforms.join(', ')}
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "queryComplexity": "simple|moderate|complex|very_complex",
+  "searchQueries": [
+    {
+      "query": "optimized search query text",
+      "platforms": ["platform1", "platform2"] or null,
+      "reason": "why this specific query",
+      "searchType": "broad|specific|comparative|sentiment"
+    }
+  ],
+  "reasoning": "detailed strategy explanation",
+  "expectedIterations": number,
+  "coverageGoals": {
+    "platformCoverage": "all|specific|comparative",
+    "topicBreadth": "narrow|moderate|comprehensive",
+    "minimumResults": number
+  }
+}
+
+Rules:
+- Analyze question complexity and determine if iterative search is needed
+- For broad questions (e.g., "most common problem"): generate diverse query angles (issues, errors, complaints, bugs, problems)
+- For cross-platform comparative questions: create platform-specific queries with consistent search terms
+- For sentiment questions: include sentiment-oriented search terms
+- Generate 3-10 initial queries depending on complexity
+- Plan for follow-up iterations if topic is broad or comparative
+- Optimize query text for semantic search (focus on key concepts)`;
+
+      const userMessage = `Generate a comprehensive search strategy for this question:
+
+Question: "${question}"
+
+Available platforms: ${availablePlatforms.join(', ')}
+Total platforms: ${availablePlatforms.length}
+
+Analyze the question's:
+1. Scope (single topic vs. broad analysis)
+2. Comparison needs (single platform vs. cross-platform)
+3. Depth required (quick answer vs. comprehensive analysis)
+4. Whether iterative search would improve results
+
+Respond with ONLY the JSON object.`;
+
+      const response = await client.messages.create({
+        model: this.model, // Use Sonnet 4.5
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: userMessage
+        }]
+      });
+
+      const jsonText = response.content[0].text.trim();
+      console.log('Raw Sonnet search strategy response:', jsonText);
 
       // Remove markdown code blocks if present
       const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      console.log('Cleaned JSON:', cleanJson);
 
       const parsed = JSON.parse(cleanJson);
       console.log('Parsed search plan:', JSON.stringify(parsed, null, 2));
 
-      return parsed;
+      return {
+        ...parsed,
+        usage: response.usage
+      };
     } catch (error) {
       console.error('Error analyzing search intent:', error);
       console.error('Error details:', error.message);
       // Fallback to simple single query
       return {
+        queryComplexity: 'simple',
         searchQueries: [{
           query: question,
           platforms: null,
-          reason: 'Fallback due to intent analysis error'
+          reason: 'Fallback due to intent analysis error',
+          searchType: 'broad'
         }],
-        reasoning: 'Using fallback strategy due to error'
+        reasoning: 'Using fallback strategy due to error',
+        expectedIterations: 1,
+        coverageGoals: {
+          platformCoverage: 'all',
+          topicBreadth: 'moderate',
+          minimumResults: 10
+        }
       };
     }
   }

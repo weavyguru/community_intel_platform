@@ -4,7 +4,7 @@ const crypto = require('crypto');
 class EmailService {
   async sendVerificationEmail(user, verificationToken) {
     try {
-      const verificationUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/auth/verify/${verificationToken}`;
+      const verificationUrl = `${process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`}/api/auth/verify/${verificationToken}`;
 
       const msg = {
         to: user.email,
@@ -40,7 +40,7 @@ class EmailService {
 
   async sendPasswordResetEmail(user, resetToken) {
     try {
-      const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+      const resetUrl = `${process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`}/reset-password/${resetToken}`;
 
       const msg = {
         to: user.email,
@@ -102,7 +102,7 @@ class EmailService {
             ${tasksHtml}
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.BASE_URL || 'http://localhost:3000'}/tasks" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              <a href="${process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`}/tasks" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
                 View All Tasks
               </a>
             </div>
@@ -163,6 +163,75 @@ class EmailService {
     }
 
     return html;
+  }
+
+  async sendTaskDelegationEmail(task, delegatedUser) {
+    try {
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
+      const taskCompleteUrl = `${baseUrl}/tasks?taskId=${task._id}&done=true`;
+      const taskViewUrl = `${baseUrl}/tasks?taskId=${task._id}`;
+
+      const msg = {
+        to: delegatedUser.email,
+        from: getFromEmail(),
+        subject: `Task Delegated: ${task.title}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>You've Been Tasked!</h2>
+            <p>Hi ${delegatedUser.name},</p>
+            <p>You've been tasked to respond to this post from <strong>${task.platform}</strong>.</p>
+
+            <div style="background-color: #F3F4F6; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0;">
+              <h3 style="margin: 0 0 10px 0;">${task.title}</h3>
+              <p style="color: #6B7280; margin: 5px 0;">${task.snippet}</p>
+              ${task.metadata?.author ? `<p style="color: #6B7280; font-size: 12px; margin-top: 10px;">Author: ${task.metadata.author}</p>` : ''}
+            </div>
+
+            ${task.suggestedResponse ? `
+              <div style="margin: 20px 0;">
+                <h3>Suggested Response</h3>
+                <div style="background-color: #FEF3C7; border: 1px solid #F59E0B; border-radius: 6px; padding: 15px;">
+                  <p style="margin: 0; white-space: pre-wrap;">${task.suggestedResponse}</p>
+                </div>
+                <p style="color: #6B7280; font-size: 12px; margin-top: 5px;">Feel free to tweak this response before posting!</p>
+              </div>
+            ` : ''}
+
+            <div style="margin: 30px 0;">
+              <h3>What to do:</h3>
+              <ol style="color: #4B5563;">
+                <li>Click the link below to view the source post</li>
+                <li>Copy and paste the suggested response (or customize it)</li>
+                <li>Submit your response on ${task.platform}</li>
+                <li>When you're done, click the "Done it!" button below</li>
+              </ol>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${task.sourceUrl}" target="_blank" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 0 10px 10px 0;">
+                View Source Post →
+              </a>
+              <a href="${taskCompleteUrl}" style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 0 0 10px 0;">
+                ✓ Done it!
+              </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 12px; text-align: center;">
+              Or <a href="${taskViewUrl}" style="color: #4F46E5;">view the task details</a> in the platform
+            </p>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+          </div>
+        `
+      };
+
+      await sgMail.send(msg);
+      console.log(`Task delegation email sent to ${delegatedUser.email} for task ${task._id}`);
+    } catch (error) {
+      console.error('Error sending task delegation email:', error);
+      throw error;
+    }
   }
 
   generateToken() {

@@ -3,6 +3,32 @@ const claudeService = require('../services/claudeService');
 const { AgentConfig } = require('../models/AgentConfig');
 const ClaudeConversation = require('../models/ClaudeConversation');
 
+// Helper function to filter out low-quality content
+function filterLowQualityContent(results) {
+  const LOW_QUALITY_PATTERNS = /^(why\?*|help|same|lol|\+1|same here|its annoying|it'?s annoying|very annoying|patience grasshopper|i could help|u can tell me)$/i;
+  const MIN_POST_LENGTH = 50;
+  const MIN_COMMENT_LENGTH = 100;
+
+  return results.filter(result => {
+    const content = result.content || '';
+    const isComment = result.metadata?.is_comment === true;
+    const trimmedContent = content.trim();
+
+    // Check for low-quality patterns
+    if (LOW_QUALITY_PATTERNS.test(trimmedContent)) {
+      return false;
+    }
+
+    // Check minimum length based on type
+    const minLength = isComment ? MIN_COMMENT_LENGTH : MIN_POST_LENGTH;
+    if (trimmedContent.length < minLength) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 // @desc    Semantic search in Chroma DB
 // @route   POST /api/search
 // @access  Private
@@ -72,12 +98,13 @@ exports.ask = async (req, res) => {
     const logEntries = [];
 
     // Emit status update and log it
-    const emitStatus = (message, detail = '', model = null) => {
+    const emitStatus = (message, detail = '', model = null, metadata = {}) => {
       const logEntry = {
         message,
         detail,
         model,
-        timestamp: new Date()
+        timestamp: new Date(),
+        ...metadata
       };
 
       logEntries.push(logEntry);
@@ -99,8 +126,12 @@ exports.ask = async (req, res) => {
       chromaFilters.endDate = new Date(filters.endDate);
     }
 
-    // Use Haiku to analyze search intent and generate queries
-    emitStatus('Analyzing question', 'Using AI to understand your question and generate optimal search queries', 'Claude Haiku 3.5');
+    // Get the main model being used
+    const mainModel = process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
+    const mainModelName = 'Claude Opus 4';
+
+    // STEP 1: Analyze search intent with Opus 4
+    emitStatus('Analyzing question', `Using ${mainModelName} to understand your question and generate comprehensive search strategy`, mainModel);
 
     const availablePlatforms = await chromaService.getMetadataFilters();
     const platforms = availablePlatforms.platforms || [];
@@ -111,80 +142,199 @@ exports.ask = async (req, res) => {
     if (!searchPlan || !searchPlan.searchQueries || !Array.isArray(searchPlan.searchQueries) || searchPlan.searchQueries.length === 0) {
       console.error('Invalid search plan returned:', JSON.stringify(searchPlan, null, 2));
       emitStatus('Search plan error', 'Using fallback single query strategy', 'System');
-      // Fallback to single query
       searchPlan.searchQueries = [{
         query: question,
         platforms: null,
-        reason: 'Fallback query due to planning error'
+        reason: 'Fallback query due to planning error',
+        searchType: 'broad'
       }];
       searchPlan.reasoning = 'Using fallback single query strategy';
+      searchPlan.queryComplexity = 'simple';
+      searchPlan.expectedIterations = 1;
     }
 
-    emitStatus('Search plan generated', `${searchPlan.searchQueries.length} search ${searchPlan.searchQueries.length === 1 ? 'query' : 'queries'} planned\n${searchPlan.reasoning}`, 'Claude Haiku 3.5');
+    // Broadcast search strategy
+    emitStatus(
+      'Search strategy generated',
+      `Complexity: ${searchPlan.queryComplexity}\n${searchPlan.searchQueries.length} initial ${searchPlan.searchQueries.length === 1 ? 'query' : 'queries'}\nExpected iterations: ${searchPlan.expectedIterations}\n\n${searchPlan.reasoning}`,
+      mainModelName,
+      {
+        tokensUsed: searchPlan.usage,
+        queryComplexity: searchPlan.queryComplexity,
+        initialQueries: searchPlan.searchQueries.length
+      }
+    );
     console.log('Search plan:', JSON.stringify(searchPlan, null, 2));
 
-    // Execute ALL queries that Haiku generated
+    // STEP 2: Iterative search execution
     let allResults = [];
     const seenDeeplinks = new Set();
-    const resultsPerQuery = Math.ceil(parseInt(contextLimit) / searchPlan.searchQueries.length);
+    const maxIterations = Math.min(searchPlan.expectedIterations || 1, 4); // Cap at 4 iterations
+    let currentIteration = 1;
+    let queriesToExecute = [...searchPlan.searchQueries];
 
-    for (let i = 0; i < searchPlan.searchQueries.length; i++) {
-      const searchQuery = searchPlan.searchQueries[i];
+    while (currentIteration <= maxIterations && queriesToExecute.length > 0) {
+      emitStatus(
+        `Starting iteration ${currentIteration}/${maxIterations}`,
+        `Executing ${queriesToExecute.length} search ${queriesToExecute.length === 1 ? 'query' : 'queries'}`,
+        'System',
+        { iteration: currentIteration, totalIterations: maxIterations }
+      );
 
-      try {
-        const platformInfo = searchQuery.platforms
-          ? `Platform: ${searchQuery.platforms.join(', ')}`
-          : 'All platforms';
+      // Execute queries for this iteration (prioritize posts over comments)
+      const resultsPerQuery = Math.ceil(parseInt(contextLimit) / queriesToExecute.length);
 
-        emitStatus(
-          `Query ${i + 1}/${searchPlan.searchQueries.length}`,
-          `"${searchQuery.query}"\n${platformInfo}\nReason: ${searchQuery.reason}`,
-          'Chroma Vector DB'
-        );
+      for (let i = 0; i < queriesToExecute.length; i++) {
+        const searchQuery = queriesToExecute[i];
 
-        // Build filter for this specific query
-        const queryFilters = { ...chromaFilters };
-        if (searchQuery.platforms && searchQuery.platforms.length > 0) {
-          queryFilters.platforms = searchQuery.platforms;
-        }
+        try {
+          const platformInfo = searchQuery.platforms
+            ? `Platforms: ${searchQuery.platforms.join(', ')}`
+            : 'All platforms';
 
-        const chromaResultsRaw = await chromaService.searchSemantic(
-          searchQuery.query,
-          resultsPerQuery * 3, // Fetch 3x to account for duplicates
-          queryFilters
-        );
+          emitStatus(
+            `Query ${i + 1}/${queriesToExecute.length} (Iteration ${currentIteration})`,
+            `Search: "${searchQuery.query}"\n${platformInfo}\nType: ${searchQuery.searchType}\nReason: ${searchQuery.reason}`,
+            'Chroma Vector DB',
+            {
+              iteration: currentIteration,
+              queryIndex: i + 1,
+              totalQueries: queriesToExecute.length,
+              searchType: searchQuery.searchType
+            }
+          );
 
-        // Add unique results
-        let added = 0;
-        for (const result of chromaResultsRaw) {
-          const deeplink = result.metadata?.deeplink;
-          if (!deeplink || !seenDeeplinks.has(deeplink)) {
-            if (deeplink) seenDeeplinks.add(deeplink);
-            allResults.push(result);
-            added++;
-            if (added >= resultsPerQuery) break;
+          // Build filter for this specific query
+          const queryFilters = { ...chromaFilters };
+          if (searchQuery.platforms && searchQuery.platforms.length > 0) {
+            queryFilters.platforms = searchQuery.platforms;
           }
+
+          // TIER 1: Try to get posts first (is_comment: false)
+          const postFilters = { ...queryFilters, isComment: false };
+          const postsRaw = await chromaService.searchSemantic(
+            searchQuery.query,
+            resultsPerQuery * 3, // Fetch extra to account for duplicates and quality filtering
+            postFilters
+          );
+
+          // Filter for quality
+          const qualityPosts = filterLowQualityContent(postsRaw);
+
+          // TIER 2: If we need more results, get high-quality comments
+          let commentsRaw = [];
+          if (qualityPosts.length < resultsPerQuery) {
+            const commentFilters = { ...queryFilters, isComment: true };
+            const needed = (resultsPerQuery - qualityPosts.length) * 3;
+            commentsRaw = await chromaService.searchSemantic(
+              searchQuery.query,
+              needed,
+              commentFilters
+            );
+          }
+
+          // Filter comments for quality (stricter)
+          const qualityComments = filterLowQualityContent(commentsRaw);
+
+          // Combine posts and comments (posts first)
+          const combinedResults = [...qualityPosts, ...qualityComments];
+
+          // Add unique results
+          let added = 0;
+          for (const result of combinedResults) {
+            const deeplink = result.metadata?.deeplink;
+            if (!deeplink || !seenDeeplinks.has(deeplink)) {
+              if (deeplink) seenDeeplinks.add(deeplink);
+              allResults.push(result);
+              added++;
+              if (added >= resultsPerQuery) break;
+            }
+          }
+
+          const postCount = qualityPosts.slice(0, added).length;
+          const commentCount = added - postCount;
+
+          emitStatus(
+            `Query ${i + 1} complete`,
+            `Added ${added} unique results: ${postCount} posts, ${commentCount} comments (${allResults.length} total accumulated)`,
+            'Chroma Vector DB',
+            { resultsAdded: added, postsAdded: postCount, commentsAdded: commentCount, totalResults: allResults.length }
+          );
+          console.log(`Iteration ${currentIteration}, Query ${i + 1}: "${searchQuery.query}" → ${added} unique results (${postCount} posts, ${commentCount} comments)`);
+
+        } catch (error) {
+          emitStatus(`Query ${i + 1} failed`, error.message, 'Chroma Vector DB', { error: true });
+          console.error(`Error executing query ${i + 1}:`, error.message);
         }
+      }
+
+      // STEP 3: Evaluate if we need more iterations
+      if (currentIteration < maxIterations) {
+        emitStatus(
+          `Evaluating search coverage`,
+          `Analyzing ${allResults.length} results to determine if additional searches are needed`,
+          mainModelName,
+          { iteration: currentIteration }
+        );
+
+        const evaluation = await claudeService.evaluateSearchResults(
+          question,
+          allResults,
+          searchPlan,
+          currentIteration
+        );
 
         emitStatus(
-          `Query ${i + 1} complete`,
-          `Added ${added} unique results (${allResults.length} total so far)`,
-          'Chroma Vector DB'
+          'Coverage evaluation complete',
+          `Complete: ${evaluation.isComplete}\nConfidence: ${evaluation.confidence}%\nGaps: ${evaluation.coverageGaps.join(', ') || 'None'}\n\n${evaluation.reasoning}`,
+          mainModelName,
+          {
+            tokensUsed: evaluation.usage,
+            isComplete: evaluation.isComplete,
+            confidence: evaluation.confidence,
+            gaps: evaluation.coverageGaps
+          }
         );
-        console.log(`Query ${i + 1}: "${searchQuery.query}" → ${added} unique results added`);
 
-      } catch (error) {
-        emitStatus(`Query ${i + 1} failed`, error.message, 'Chroma Vector DB');
-        console.error(`Error executing query ${i + 1}:`, error.message);
+        console.log('Evaluation:', JSON.stringify(evaluation, null, 2));
+
+        // Check if we should continue
+        if (evaluation.isComplete || evaluation.confidence >= 80) {
+          emitStatus(
+            'Search complete',
+            `Sufficient coverage achieved with ${allResults.length} results (${evaluation.confidence}% confidence)`,
+            'System'
+          );
+          break;
+        } else if (evaluation.recommendedQueries && evaluation.recommendedQueries.length > 0) {
+          queriesToExecute = evaluation.recommendedQueries;
+          currentIteration++;
+          emitStatus(
+            'Additional searches needed',
+            `Coverage gaps identified. Planning ${queriesToExecute.length} follow-up ${queriesToExecute.length === 1 ? 'query' : 'queries'}`,
+            'System',
+            { nextIteration: currentIteration }
+          );
+        } else {
+          // No more queries suggested
+          break;
+        }
+      } else {
+        emitStatus(
+          'Max iterations reached',
+          `Completed ${maxIterations} search iterations with ${allResults.length} total results`,
+          'System'
+        );
+        break;
       }
     }
 
     // Final deduplication and limiting
     const chromaResults = allResults.slice(0, parseInt(contextLimit));
-    emitStatus('Finalizing results', `Collected ${allResults.length} unique sources, selecting top ${chromaResults.length} for analysis`, 'Chroma Vector DB');
+    emitStatus('Finalizing results', `Collected ${allResults.length} unique sources across ${currentIteration} ${currentIteration === 1 ? 'iteration' : 'iterations'}, selecting top ${chromaResults.length} for analysis`, 'System');
     console.log(`Final result: ${chromaResults.length} unique sources (target was ${contextLimit})`);
 
-    // Summarize results
+    // STEP 4: Summarize collected results
     const platformCounts = {};
     const dateRange = { earliest: null, latest: null };
     chromaResults.forEach(result => {
@@ -207,32 +357,59 @@ exports.ask = async (req, res) => {
       resultSummary += `\nDate range: ${dateRange.earliest.toLocaleDateString()} to ${dateRange.latest.toLocaleDateString()}`;
     }
 
-    emitStatus('Knowledge retrieved', resultSummary);
+    emitStatus(
+      'Knowledge retrieved',
+      resultSummary,
+      'System',
+      {
+        totalResults: chromaResults.length,
+        platformDistribution: platformCounts,
+        dateRange: dateRange,
+        iterations: currentIteration
+      }
+    );
     console.log(`Found ${chromaResults.length} results for analysis`);
 
-    // Enhance the question for better analysis
+    // STEP 5: Enhance the question for better analysis
     let enhancedQuestion = question;
     if (contextLimit > 25) {
       enhancedQuestion += `\n\nNote: This is a comprehensive analysis of ${chromaResults.length} community posts. Please provide a thorough, well-structured analysis covering all major themes and insights.`;
     }
 
-    // Get the model being used
-    const mainModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
-    const titleModel = 'claude-haiku-3-5-20241022';
+    const titleModel = 'claude-3-5-haiku-20241022';
 
-    // Ask Claude with enhanced context
-    emitStatus('Analyzing with Claude AI', `Using ${chromaResults.length} sources for comprehensive analysis`, mainModel);
+    // STEP 6: Perform final analysis with Claude
+    emitStatus(
+      'Analyzing with Claude AI',
+      `Deep analysis of ${chromaResults.length} sources using ${mainModelName}\nThis may take a moment...`,
+      mainModelName
+    );
+
+    const analysisStartTime = Date.now();
     const response = await claudeService.askWithContext(
       enhancedQuestion,
       chromaResults,
       instructions
     );
+    const analysisTime = Date.now() - analysisStartTime;
 
-    emitStatus('Generating title', 'Creating concise title for analysis', titleModel);
-    // Generate title using Haiku 3.5
+    emitStatus(
+      'Analysis complete',
+      `Processed ${chromaResults.length} sources in ${(analysisTime / 1000).toFixed(1)}s`,
+      mainModelName,
+      {
+        tokensUsed: response.usage,
+        analysisTime: analysisTime,
+        sourcesAnalyzed: chromaResults.length
+      }
+    );
+
+    // STEP 7: Generate title using Haiku
+    emitStatus('Generating title', 'Creating concise title for analysis', 'Claude Haiku 3.5');
     const title = await claudeService.generateTitle(question);
 
-    emitStatus('Saving to database', 'Storing analysis and sources');
+    // STEP 8: Save to database
+    emitStatus('Saving to database', 'Storing analysis and sources', 'System');
 
     // Determine analysis depth
     const analysisDepth = contextLimit > 50 ? 'comprehensive' : contextLimit > 25 ? 'deep' : contextLimit > 10 ? 'standard' : 'quick';
@@ -276,7 +453,18 @@ exports.ask = async (req, res) => {
 
     console.log(`Saved conversation: ${conversation._id} - "${title}"`);
 
-    emitStatus('Analysis complete', `"${title}" saved successfully`);
+    // STEP 9: Broadcast completion
+    emitStatus(
+      'Complete',
+      `"${title}" saved successfully\n\nAnalysis Summary:\n- Iterations: ${currentIteration}\n- Sources analyzed: ${chromaResults.length}\n- Platforms: ${Object.keys(platformCounts).length}\n- Depth: ${analysisDepth}`,
+      'System',
+      {
+        conversationId: conversation._id,
+        totalIterations: currentIteration,
+        sourcesAnalyzed: chromaResults.length,
+        analysisDepth: analysisDepth
+      }
+    );
 
     res.json({
       success: true,
@@ -286,7 +474,8 @@ exports.ask = async (req, res) => {
       sources: response.sources,
       sourcesAnalyzed: chromaResults.length,
       usage: response.usage,
-      analysisDepth
+      analysisDepth,
+      iterations: currentIteration
     });
   } catch (error) {
     console.error('Ask error:', error);
@@ -318,7 +507,7 @@ exports.getRecentConversations = async (req, res) => {
   try {
     const { limit = 10 } = req.query;
 
-    const conversations = await ClaudeConversation.find()
+    const conversations = await ClaudeConversation.find({ backgroundGenerated: { $ne: true } })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .select('title question createdAt analysisDepth sourcesAnalyzed')
@@ -363,7 +552,7 @@ exports.searchConversations = async (req, res) => {
   try {
     const { q, startDate, endDate, analysisDepth, limit = 50, skip = 0 } = req.query;
 
-    const query = {};
+    const query = { backgroundGenerated: { $ne: true } };
 
     // Text search
     if (q) {

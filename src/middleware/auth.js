@@ -11,7 +11,12 @@ const auth = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({ error: 'Not authorized, no token' });
+      // If this is an API request, return JSON error
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'Not authorized, no token' });
+      }
+      // For browser requests, redirect to login
+      return res.redirect('/login');
     }
 
     // Verify token
@@ -21,17 +26,26 @@ const auth = async (req, res, next) => {
     req.user = await User.findById(decoded.id).select('-password');
 
     if (!req.user) {
-      return res.status(401).json({ error: 'User not found' });
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+      return res.redirect('/login');
     }
 
     if (!req.user.isVerified) {
-      return res.status(401).json({ error: 'Email not verified' });
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'Email not verified' });
+      }
+      return res.redirect('/login');
     }
 
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    return res.status(401).json({ error: 'Not authorized, token failed' });
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Not authorized, token failed' });
+    }
+    return res.redirect('/login');
   }
 };
 

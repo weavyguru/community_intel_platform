@@ -21,7 +21,9 @@
       "Bash(node:*)",
       "Bash(npm run dev:*)",
       "Bash(git pull:*)",
-      "Bash(git stash push:*)"
+      "Bash(git stash push:*)",
+      "Bash(git stash:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

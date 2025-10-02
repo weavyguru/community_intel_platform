@@ -79,7 +79,43 @@
     </div>
   </div>
 
+  <!-- Verification Email Modal -->
+  <sl-dialog id="verificationDialog" label="Check Your Email">
+    <div class="space-y-4">
+      <div class="flex items-center justify-center">
+        <sl-icon name="envelope-check" style="font-size: 4rem; color: var(--sl-color-success-600);"></sl-icon>
+      </div>
+      <p class="text-center text-gray-700">
+        A verification email has been sent to your email address.
+      </p>
+      <p class="text-center text-gray-600 text-sm">
+        Please check your inbox and click the verification link to activate your account.
+      </p>
+    </div>
+    <sl-button slot="footer" variant="primary" onclick="document.getElementById('verificationDialog').hide(); window.location.href = '/login';">
+      Go to Login
+    </sl-button>
+  </sl-dialog>
+
   <script>
+    // Global toast notification helper using Shoelace native
+    function showToast(message, variant = 'primary', icon = 'info-circle', duration = 3000) {
+      const alert = Object.assign(document.createElement('sl-alert'), {
+        variant: variant,
+        closable: true,
+        duration: duration,
+        style: 'position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; min-width: 300px; max-width: 500px;'
+      });
+
+      alert.innerHTML = `
+        <sl-icon name="${icon}" slot="icon"></sl-icon>
+        ${message}
+      `;
+
+      document.body.append(alert);
+      alert.toast();
+    }
+
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -89,17 +125,17 @@
       const confirmPassword = document.getElementById('confirmPassword').value;
 
       if (!email.endsWith('@weavy.com')) {
-        alert('Only @weavy.com email addresses are allowed');
+        showToast('Only @weavy.com email addresses are allowed', 'warning', 'exclamation-triangle');
         return;
       }
 
       if (password !== confirmPassword) {
-        alert('Passwords do not match');
+        showToast('Passwords do not match', 'warning', 'exclamation-triangle');
         return;
       }
 
       if (password.length < 6) {
-        alert('Password must be at least 6 characters');
+        showToast('Password must be at least 6 characters', 'warning', 'exclamation-triangle');
         return;
       }
 
@@ -113,14 +149,14 @@
         const data = await response.json();
 
         if (response.ok) {
-          alert('Registration successful! Please check your email to verify your account.');
-          window.location.href = '/login';
+          // Show verification modal
+          document.getElementById('verificationDialog').show();
         } else {
-          alert(data.error || 'Registration failed');
+          showToast(data.error || 'Registration failed', 'danger', 'exclamation-triangle');
         }
       } catch (error) {
         console.error('Registration error:', error);
-        alert('An error occurred during registration');
+        showToast('An error occurred during registration', 'danger', 'exclamation-triangle');
       }
     });
   </script>

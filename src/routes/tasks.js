@@ -6,9 +6,11 @@ const adminAuth = require('../middleware/adminAuth');
 
 router.get('/', auth, taskController.getTasks);
 router.get('/count', auth, taskController.getTaskCount);
+router.get('/stats', auth, taskController.getTaskStats);
 router.get('/:id', auth, taskController.getTask);
 router.put('/:id/complete', auth, taskController.completeTask);
 router.put('/:id/reopen', auth, taskController.reopenTask);
+router.put('/:id/delegate', auth, taskController.delegateTask);
 router.delete('/:id', auth, adminAuth, taskController.deleteTask);
 router.put('/:id/priority', auth, adminAuth, taskController.updatePriority);
 

@@ -10,7 +10,7 @@
   <!-- Filters -->
   <div class="bg-white rounded-lg shadow p-4">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <sl-select id="statusFilter" placeholder="All Status" value="">
+      <sl-select id="statusFilter" placeholder="All Status" value="false">
         <sl-option value="">All Status</sl-option>
         <sl-option value="false">Open</sl-option>
         <sl-option value="true">Completed</sl-option>
@@ -49,6 +49,51 @@
 
 <script>
   let currentTasks = [];
+  let allUsers = [];
+
+  // Socket.IO for real-time updates
+  if (typeof io !== 'undefined') {
+    const tasksSocket = io();
+
+    tasksSocket.on('task:updated', (data) => {
+      console.log('Task updated:', data);
+      // Only reload if on "All Status" filter, otherwise let local update handle it
+      const statusFilter = document.getElementById('statusFilter').value;
+      if (statusFilter === '') {
+        loadTasks();
+      }
+      updateTaskCountBadge();
+    });
+
+    tasksSocket.on('task:delegated', (data) => {
+      console.log('Task delegated:', data);
+      // Update delegation info without full reload
+      const taskCard = document.getElementById(`task-${data.taskId}`);
+      if (taskCard && data.delegatedTo) {
+        const detailsDiv = taskCard.querySelector('.task-details');
+        // Could add delegation info here, but for now just note it was delegated
+      }
+    });
+
+    tasksSocket.on('task:created', (data) => {
+      console.log('Task created:', data);
+      // Reload tasks to show new one
+      loadTasks();
+      updateTaskCountBadge();
+    });
+  }
+
+  async function loadUsers() {
+    try {
+      const response = await fetch('/api/users');
+      const data = await response.json();
+      if (data.success) {
+        allUsers = data.users;
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  }
 
   async function loadTasks() {
     const status = document.getElementById('statusFilter').value;
@@ -70,12 +115,33 @@
       if (data.success) {
         currentTasks = data.tasks;
         renderTasks(data.tasks);
+        checkUrlParams();
       } else {
         tasksList.innerHTML = '<p class="text-red-600 text-center">Error loading tasks</p>';
       }
     } catch (error) {
       console.error('Error loading tasks:', error);
       tasksList.innerHTML = '<p class="text-red-600 text-center">Error loading tasks</p>';
+    }
+  }
+
+  function checkUrlParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskId = urlParams.get('taskId');
+    const done = urlParams.get('done');
+
+    if (taskId) {
+      setTimeout(() => {
+        const taskElement = document.getElementById(`task-${taskId}`);
+        if (taskElement) {
+          taskElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          taskElement.style.animation = 'highlight 2s ease-in-out';
+
+          if (done === 'true') {
+            toggleTaskComplete(taskId, true);
+          }
+        }
+      }, 500);
     }
   }
 
@@ -87,35 +153,109 @@
       return;
     }
 
-    tasksList.innerHTML = tasks.map(task => `
-      <div class="bg-white rounded-lg shadow p-6 mb-4">
-        <div class="flex items-start justify-between">
-          <div class="flex items-start space-x-4 flex-1">
-            <sl-checkbox ${task.isCompleted ? 'checked' : ''} onchange="toggleTaskComplete('${task._id}', this.checked)"></sl-checkbox>
-            <div class="flex-1">
-              <h3 class="text-lg font-semibold ${task.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}">${task.title}</h3>
-              <p class="text-sm text-gray-600 mt-1">${task.snippet}</p>
+    tasksList.innerHTML = tasks.map(task => {
+      const snippetPreview = task.snippet.length > 100 ? task.snippet.substring(0, 100) + '...' : task.snippet;
 
-              <div class="flex flex-wrap gap-2 mt-3">
-                <span class="inline-block px-2 py-1 text-xs rounded ${getPriorityClass(task.priority)}">
-                  ${task.priority.toUpperCase()}
-                </span>
-                ${task.platform ? `<span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${task.platform}</span>` : ''}
-                ${task.intent ? `<span class="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">${task.intent}</span>` : ''}
-                ${task.foundByAgent ? `<span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">AI Found</span>` : ''}
+      return `
+      <div id="task-${task._id}" class="bg-white rounded-lg shadow p-4 mb-3 task-card" data-task-id="${task._id}" data-expanded="false">
+        <div class="flex items-start gap-3">
+          <sl-checkbox ${task.isCompleted ? 'checked' : ''} data-task-checkbox="${task._id}"></sl-checkbox>
+
+          <div class="flex-1 min-w-0">
+            <!-- Collapsed Header -->
+            <div class="task-header cursor-pointer" data-toggle-task="${task._id}">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                  <h3 class="text-base font-semibold ${task.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'} mb-1">${task.title}</h3>
+                  <p class="task-snippet-preview text-sm text-gray-600">${snippetPreview}</p>
+                  <div class="flex flex-wrap gap-2 mt-2">
+                    <span class="inline-block px-2 py-1 text-xs rounded ${getPriorityClass(task.priority)}">
+                      ${task.priority.toUpperCase()}
+                    </span>
+                    ${task.platform ? `<span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${task.platform}</span>` : ''}
+                  </div>
+                </div>
+                <sl-icon-button name="chevron-down" class="task-expand-icon" label="Expand task"></sl-icon-button>
               </div>
+            </div>
 
-              ${task.metadata?.author ? `<p class="text-xs text-gray-500 mt-2">Author: ${task.metadata.author}</p>` : ''}
-              ${task.isCompleted && task.completedBy ? `<p class="text-xs text-gray-500 mt-1">Completed by ${task.completedBy.name} on ${new Date(task.completedAt).toLocaleDateString()}</p>` : ''}
+            <!-- Expanded Details -->
+            <div class="task-details" style="display: none;">
+              <div class="mt-3 pt-3 border-t border-gray-200">
+                <p class="text-sm text-gray-600 mb-3">${task.snippet}</p>
 
-              <a href="${task.sourceUrl}" target="_blank" class="inline-block mt-3 text-sm text-indigo-600 hover:text-indigo-700">
-                View Source →
-              </a>
+                <div class="flex flex-wrap gap-2 mb-3">
+                  ${task.intent ? `<span class="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">${task.intent}</span>` : ''}
+                  ${task.foundByAgent ? `<span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">AI Found</span>` : ''}
+                </div>
+
+                ${task.metadata?.author ? `<p class="text-xs text-gray-500 mb-1">Author: ${task.metadata.author}</p>` : ''}
+                ${task.isCompleted && task.completedBy ? `<p class="text-xs text-gray-500 mb-1">Completed by ${task.completedBy.name} on ${new Date(task.completedAt).toLocaleDateString()}</p>` : ''}
+                ${task.delegatedTo ? `<p class="text-xs text-indigo-600 mb-1">Delegated to ${task.delegatedTo.name} on ${new Date(task.delegatedAt).toLocaleDateString()}</p>` : ''}
+
+                ${task.suggestedResponse ? `
+                  <div class="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-semibold text-yellow-800">Suggested Response</span>
+                      <sl-icon-button name="clipboard" label="Copy response" data-copy-response="${task._id}"></sl-icon-button>
+                    </div>
+                    <p id="response-${task._id}" class="text-sm text-gray-700 whitespace-pre-wrap">${task.suggestedResponse}</p>
+                  </div>
+                ` : ''}
+
+                <div class="flex items-center gap-3 mt-3">
+                  <a href="${task.sourceUrl}" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-700">
+                    View Source →
+                  </a>
+                  ${!task.isCompleted && !task.delegatedTo ? `
+                    <sl-select id="delegate-${task._id}" placeholder="Delegate to..." size="small" style="width: 200px;" data-task-id="${task._id}">
+                      ${allUsers.map(user => `<sl-option value="${user._id}">${user.name}</sl-option>`).join('')}
+                    </sl-select>
+                  ` : ''}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    `).join('');
+    `}).join('');
+
+    // Attach event listeners
+    setTimeout(() => {
+      // Delegation dropdowns
+      document.querySelectorAll('sl-select[data-task-id]').forEach(select => {
+        select.addEventListener('sl-change', (e) => {
+          const taskId = e.target.getAttribute('data-task-id');
+          const userId = e.target.value;
+          delegateTask(taskId, userId);
+        });
+      });
+
+      // Task expand/collapse
+      document.querySelectorAll('[data-toggle-task]').forEach(header => {
+        header.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-toggle-task');
+          toggleTaskExpand(taskId);
+        });
+      });
+
+      // Copy response buttons
+      document.querySelectorAll('[data-copy-response]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-copy-response');
+          copyResponse(taskId);
+        });
+      });
+
+      // Task checkboxes
+      document.querySelectorAll('[data-task-checkbox]').forEach(checkbox => {
+        checkbox.addEventListener('sl-change', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-task-checkbox');
+          const isChecked = e.target.checked;
+          toggleTaskComplete(taskId, isChecked);
+        });
+      });
+    }, 100);
   }
 
   function getPriorityClass(priority) {
@@ -130,18 +270,129 @@
   async function toggleTaskComplete(taskId, completed) {
     try {
       const endpoint = completed ? `/api/tasks/${taskId}/complete` : `/api/tasks/${taskId}/reopen`;
-      const response = await fetch(endpoint, { method: 'PUT' });
+      const response = await fetch(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.success) {
-        await loadTasks(); // Reload tasks
+        // Update UI without reloading
+        const taskCard = document.getElementById(`task-${taskId}`);
+        const titleElement = taskCard.querySelector('h3');
+
+        if (completed) {
+          titleElement.classList.add('line-through', 'text-gray-500');
+          titleElement.classList.remove('text-gray-900');
+        } else {
+          titleElement.classList.remove('line-through', 'text-gray-500');
+          titleElement.classList.add('text-gray-900');
+        }
+
+        // Update task count badge
+        updateTaskCountBadge();
       } else {
-        alert('Error updating task');
+        console.error('Task update failed:', data);
+        showToast(data.error || 'Error updating task', 'danger', 'exclamation-triangle');
+        // Revert checkbox state
+        const checkbox = document.querySelector(`[data-task-checkbox="${taskId}"]`);
+        checkbox.checked = !completed;
       }
     } catch (error) {
       console.error('Error toggling task:', error);
-      alert('Error updating task');
+      showToast('Error updating task: ' + error.message, 'danger', 'exclamation-triangle');
+      // Revert checkbox state
+      const checkbox = document.querySelector(`[data-task-checkbox="${taskId}"]`);
+      checkbox.checked = !completed;
     }
+  }
+
+  async function delegateTask(taskId, userId) {
+    if (!userId) return;
+
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/delegate`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Task delegated successfully! Email sent to the user.', 'success', 'check-circle');
+
+        // Update UI without reloading
+        const taskCard = document.getElementById(`task-${taskId}`);
+        const detailsDiv = taskCard.querySelector('.task-details');
+        const delegateDropdown = taskCard.querySelector(`#delegate-${taskId}`);
+
+        // Remove delegation dropdown
+        if (delegateDropdown && delegateDropdown.parentElement) {
+          delegateDropdown.parentElement.remove();
+        }
+
+        // Add delegation info to details section
+        const delegationInfo = document.createElement('p');
+        delegationInfo.className = 'text-xs text-indigo-600 mb-1';
+        delegationInfo.textContent = `Delegated to ${data.task.delegatedTo.name} on ${new Date(data.task.delegatedAt).toLocaleDateString()}`;
+
+        // Insert after author info
+        const authorInfo = detailsDiv.querySelector('p.text-xs.text-gray-500');
+        if (authorInfo) {
+          authorInfo.parentNode.insertBefore(delegationInfo, authorInfo.nextSibling);
+        } else {
+          detailsDiv.querySelector('div').insertBefore(delegationInfo, detailsDiv.querySelector('div').firstChild);
+        }
+
+        // Update task count badge
+        updateTaskCountBadge();
+      } else {
+        console.error('Delegation failed:', data);
+        showToast(data.error || 'Error delegating task', 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Error delegating task:', error);
+      showToast('Error delegating task: ' + error.message, 'danger', 'exclamation-triangle');
+    }
+  }
+
+  function toggleTaskExpand(taskId) {
+    const taskCard = document.getElementById(`task-${taskId}`);
+    const isExpanded = taskCard.getAttribute('data-expanded') === 'true';
+    const detailsDiv = taskCard.querySelector('.task-details');
+    const expandIcon = taskCard.querySelector('.task-expand-icon');
+
+    if (isExpanded) {
+      // Collapse
+      detailsDiv.style.display = 'none';
+      taskCard.setAttribute('data-expanded', 'false');
+      expandIcon.name = 'chevron-down';
+    } else {
+      // Expand
+      detailsDiv.style.display = 'block';
+      taskCard.setAttribute('data-expanded', 'true');
+      expandIcon.name = 'chevron-up';
+    }
+  }
+
+  function copyResponse(taskId) {
+    const responseText = document.getElementById(`response-${taskId}`).textContent;
+    navigator.clipboard.writeText(responseText).then(() => {
+      showToast('Response copied to clipboard!', 'success', 'clipboard-check');
+    }).catch(err => {
+      console.error('Error copying text:', err);
+      showToast('Error copying to clipboard', 'danger', 'exclamation-triangle');
+    });
   }
 
   // Event listeners for filters
@@ -149,6 +400,16 @@
   document.getElementById('priorityFilter').addEventListener('sl-change', loadTasks);
   document.getElementById('platformFilter').addEventListener('sl-change', loadTasks);
 
-  // Load tasks on page load
-  loadTasks();
+  // Load users and tasks on page load
+  loadUsers().then(() => loadTasks());
 </script>
+
+<style>
+  @keyframes highlight {
+    0%, 100% { background-color: white; }
+    50% { background-color: #FEF3C7; }
+  }
+  .task-card {
+    transition: all 0.3s ease;
+  }
+</style>

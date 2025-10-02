@@ -105,7 +105,7 @@ class ChromaService {
     }
   }
 
-  async searchByTimeRange(startDate, endDate, limit = 50) {
+  async searchByTimeRange(startDate, endDate, limit = null) {
     try {
       await this.initialize();
 
@@ -113,6 +113,40 @@ class ChromaService {
       const startUnix = Math.floor(startDate.getTime() / 1000);
       const endUnix = Math.floor(endDate.getTime() / 1000);
 
+      // If no limit specified, get ALL results (handle pagination)
+      if (limit === null) {
+        let allResults = [];
+        let offset = 0;
+        const batchSize = 100; // ChromaDB pagination limit
+        let hasMore = true;
+
+        while (hasMore) {
+          const results = await this.collection.get({
+            where: {
+              $and: [
+                { timestamp_unix: { $gte: startUnix } },
+                { timestamp_unix: { $lte: endUnix } }
+              ]
+            },
+            limit: batchSize,
+            offset: offset
+          });
+
+          const formatted = this._formatGetResults(results);
+          allResults = allResults.concat(formatted);
+
+          // Check if we got fewer results than requested (means we're at the end)
+          hasMore = results.ids.length === batchSize;
+          offset += batchSize;
+
+          console.log(`Fetched batch: ${formatted.length} items (offset: ${offset - batchSize}, total so far: ${allResults.length})`);
+        }
+
+        console.log(`Total items fetched from time range: ${allResults.length}`);
+        return allResults;
+      }
+
+      // If limit specified, use it directly
       const results = await this.collection.get({
         where: {
           $and: [
@@ -207,6 +241,11 @@ class ChromaService {
     // Platform filtering
     if (filters.platforms && filters.platforms.length > 0) {
       conditions.push({ platform: { $in: filters.platforms } });
+    }
+
+    // is_comment filtering (prioritize posts over comments)
+    if (filters.isComment !== undefined) {
+      conditions.push({ is_comment: { $eq: filters.isComment } });
     }
 
     // Combine conditions

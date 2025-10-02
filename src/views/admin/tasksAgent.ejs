@@ -9,7 +9,7 @@
         Ask Agent
       </a>
       <a href="/admin/bg-agent" class="px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
-        Background Agent
+        Intelligence Job
       </a>
       <a href="/admin/tasks-agent" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-100 text-indigo-700">
         Tasks Agent
@@ -140,11 +140,11 @@
       localStorage.setItem('tasksAgentValuePropsDraft', valuePropsEditor.getValue());
     });
 
+    // Check for drafts before loading config
+    checkForDraft();
+
     // Load config after editors are ready
     loadConfig();
-
-    // Check for drafts after config loads
-    checkForDraft();
 
     // Add event listeners
     document.getElementById('saveButton').addEventListener('click', saveConfig);
@@ -173,10 +173,14 @@
         document.getElementById('lastUpdated').textContent = new Date(data.config.lastUpdated).toLocaleString();
         updatePreview('instructions');
         updatePreview('valueProps');
+
+        // Clear localStorage after successfully loading config to sync with server state
+        localStorage.removeItem('tasksAgentInstructionsDraft');
+        localStorage.removeItem('tasksAgentValuePropsDraft');
       }
     } catch (error) {
       console.error('Error loading config:', error);
-      alert('Error loading configuration');
+      showToast('Error loading configuration', 'danger', 'exclamation-triangle');
     }
   }
 
@@ -187,12 +191,16 @@
     if (instructionsDraft && instructionsDraft !== instructionsEditor.getValue()) {
       if (confirm('Found unsaved changes for instructions. Restore draft?')) {
         instructionsEditor.setValue(instructionsDraft);
+      } else {
+        localStorage.removeItem('tasksAgentInstructionsDraft');
       }
     }
 
     if (valuePropsDraft && valuePropsDraft !== valuePropsEditor.getValue()) {
       if (confirm('Found unsaved changes for value propositions. Restore draft?')) {
         valuePropsEditor.setValue(valuePropsDraft);
+      } else {
+        localStorage.removeItem('tasksAgentValuePropsDraft');
       }
     }
   }
@@ -245,13 +253,13 @@
         localStorage.removeItem('tasksAgentInstructionsDraft');
         localStorage.removeItem('tasksAgentValuePropsDraft');
 
-        alert('Configuration saved successfully!');
+        showToast('Configuration saved successfully!', 'success', 'check-circle');
       } else {
-        alert('Error: ' + data.error);
+        showToast('Error: ' + data.error, 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       console.error('Save error:', error);
-      alert('Error saving configuration');
+      showToast('Error saving configuration', 'danger', 'exclamation-triangle');
     } finally {
       saveButton.loading = false;
     }
@@ -314,11 +322,11 @@
         instructionsEditor.setValue(data.version.instructions);
         valuePropsEditor.setValue(data.version.valuePropositions || '');
         document.getElementById('versionHistoryModal').hide();
-        alert('Version restored! Click Save to apply changes.');
+        showToast('Version restored! Click Save to apply changes.', 'success', 'check-circle');
       }
     } catch (error) {
       console.error('Restore error:', error);
-      alert('Error restoring version');
+      showToast('Error restoring version', 'danger', 'exclamation-triangle');
     }
   }
 </script>

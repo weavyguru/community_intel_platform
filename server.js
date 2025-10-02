@@ -115,6 +115,10 @@ app.use('/api', searchRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Users API endpoint
+const taskController = require('./src/controllers/taskController');
+app.get('/api/users', auth, taskController.getUsers);
+
 // View Routes (with layout)
 app.get('/', auth, async (req, res) => {
   try {
@@ -263,30 +267,30 @@ const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Start intelligence job
+  // Initialize Socket.IO BEFORE starting intelligence job
+  const { Server } = require('socket.io');
+  const io = new Server(server, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST']
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    socket.on('disconnect', () => {
+      console.log('Client disconnected:', socket.id);
+    });
+  });
+
+  // Make io available globally BEFORE starting job
+  global.io = io;
+
+  // Start intelligence job (now global.io is available)
   intelligenceJob.start();
   console.log('Intelligence job started');
 });
-
-// Initialize Socket.IO
-const { Server } = require('socket.io');
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
-
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-});
-
-// Make io available globally
-global.io = io;
 
 // Graceful shutdown
 process.on('SIGINT', () => {

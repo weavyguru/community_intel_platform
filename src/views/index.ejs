@@ -242,6 +242,60 @@
       <div id="taskSuggestionsList" class="space-y-3"></div>
     </div>
 
+    <!-- Analysis Report Container -->
+    <div id="analysisReportContainer" class="hidden mb-6">
+      <sl-details>
+        <div slot="summary" class="flex items-center gap-2">
+          <sl-icon name="graph-up"></sl-icon>
+          <span class="font-medium">Detailed Analysis Report</span>
+          <sl-badge id="reportSourceCount" variant="neutral" pill>0 sources</sl-badge>
+        </div>
+
+        <div class="mt-3 space-y-3">
+          <!-- Summary Stats -->
+          <div class="p-3 bg-blue-50 rounded border border-blue-200">
+            <div class="grid grid-cols-3 gap-4 text-center text-sm">
+              <div>
+                <div class="font-semibold text-gray-900" id="reportTotalSources">-</div>
+                <div class="text-xs text-gray-600">Sources Analyzed</div>
+              </div>
+              <div>
+                <div class="font-semibold text-green-600" id="reportTasksGenerated">-</div>
+                <div class="text-xs text-gray-600">Tasks Generated</div>
+              </div>
+              <div>
+                <div class="font-semibold text-indigo-600" id="reportConversionRate">-%</div>
+                <div class="text-xs text-gray-600">Conversion Rate</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter Buttons -->
+          <div class="flex gap-2">
+            <sl-button size="small" id="reportFilterAll" variant="default">All</sl-button>
+            <sl-button size="small" id="reportFilterTasks" variant="success">Tasks Only</sl-button>
+            <sl-button size="small" id="reportFilterSkipped" variant="neutral">Skipped Only</sl-button>
+          </div>
+
+          <!-- Report Table -->
+          <div id="reportTableContainer" class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-100 sticky top-0">
+                <tr>
+                  <th class="px-2 py-2 text-left">Score</th>
+                  <th class="px-2 py-2 text-left">Platform</th>
+                  <th class="px-2 py-2 text-left">Author</th>
+                  <th class="px-2 py-2 text-left">Reasoning</th>
+                  <th class="px-2 py-2 text-left">Link</th>
+                </tr>
+              </thead>
+              <tbody id="reportTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </sl-details>
+    </div>
+
     <!-- Task Generation Status -->
     <div id="taskGenerationStatus" class="hidden mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
       <div class="flex items-center gap-3">
@@ -341,17 +395,26 @@
     });
   });
 
-  // Load task counts
-  async function loadTaskCounts() {
+  // Load task stats
+  async function loadTaskStats() {
     try {
-      const response = await fetch('/api/tasks/count', { credentials: 'include' });
+      const response = await fetch('/api/tasks/stats', { credentials: 'include' });
       const data = await response.json();
       if (data.success) {
-        document.getElementById('openTasksCount').textContent = data.count;
+        document.getElementById('openTasksCount').textContent = data.stats.open;
+        document.getElementById('completedTodayCount').textContent = data.stats.completedToday;
+        document.getElementById('highPriorityCount').textContent = data.stats.highPriority;
       }
     } catch (error) {
-      console.error('Error loading task counts:', error);
+      console.error('Error loading task stats:', error);
     }
+  }
+
+  // Socket.IO for real-time updates (use existing socket from layout if available)
+  if (typeof io !== 'undefined') {
+    const indexSocket = io();
+    indexSocket.on('task:created', () => loadTaskStats());
+    indexSocket.on('task:updated', () => loadTaskStats());
   }
 
   // Search form handler
@@ -363,7 +426,7 @@
     const searchTimeRange = document.getElementById('searchTimeRange').value;
 
     if (!query) {
-      alert('Please enter a search query');
+      showToast('Please enter a search query', 'warning', 'exclamation-triangle');
       return;
     }
 
@@ -482,7 +545,7 @@ Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null,
 
     const question = document.getElementById('askQuestion').value;
     if (!question) {
-      alert('Please enter a question');
+      showToast('Please enter a question', 'warning', 'exclamation-triangle');
       return;
     }
 
@@ -581,13 +644,13 @@ Trends: ${includeTrends}`;
         // Hide status, remove button loading state and show error
         document.getElementById('askStatus').classList.add('hidden');
         submitBtn.loading = false;
-        alert('Error processing question: ' + (data.error || 'Unknown error'));
+        showToast('Error processing question: ' + (data.error || 'Unknown error'), 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       // Hide status, remove button loading state and show error
       document.getElementById('askStatus').classList.add('hidden');
       submitBtn.loading = false;
-      alert('Error asking Claude: ' + error.message);
+      showToast('Error asking Claude: ' + error.message, 'danger', 'exclamation-triangle');
       console.error('Ask error:', error);
     }
   });
@@ -727,9 +790,15 @@ Trends: ${includeTrends}`;
         if (conv.suggestedTasks && conv.suggestedTasks.length > 0) {
           displaySuggestedTasks(conv.suggestedTasks);
           genTasksBtn.style.display = 'none';
+
+          // Display analysis report if available
+          if (conv.taskGenerationReport && conv.taskGenerationReport.length > 0) {
+            displayAnalysisReport(conv.taskGenerationReport, conv.suggestedTasks.length);
+          }
         } else {
           genTasksBtn.style.display = 'inline-flex';
           document.getElementById('taskSuggestionsContainer').classList.add('hidden');
+          document.getElementById('analysisReportContainer').classList.add('hidden');
         }
 
         // Close history modal if open
@@ -747,7 +816,7 @@ Trends: ${includeTrends}`;
       }
     } catch (error) {
       console.error('Error loading conversation:', error);
-      alert('Error loading conversation');
+      showToast('Error loading conversation', 'danger', 'exclamation-triangle');
     }
   }
 
@@ -832,7 +901,7 @@ Trends: ${includeTrends}`;
   // Load counts and history on page load
   document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM fully loaded');
-    loadTaskCounts();
+    loadTaskStats();
     loadRecentConversations();
 
     // Add event listener for search history button
@@ -909,12 +978,15 @@ Trends: ${includeTrends}`;
       if (data.success) {
         displaySuggestedTasks(data.suggestedTasks);
         genBtn.style.display = 'none';
+
+        // Reload conversation to get the analysis report
+        loadConversation(window.currentConversationId);
       } else {
-        alert('Error: ' + (data.error || 'Failed to generate tasks'));
+        showToast('Error: ' + (data.error || 'Failed to generate tasks'), 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       console.error('Generate tasks error:', error);
-      alert('Error generating tasks');
+      showToast('Error generating tasks', 'danger', 'exclamation-triangle');
     } finally {
       genBtn.loading = false;
       document.getElementById('taskGenerationStatus').classList.add('hidden');
@@ -972,6 +1044,86 @@ Trends: ${includeTrends}`;
     `).join('');
   }
 
+  function displayAnalysisReport(report, tasksCount) {
+    if (!report || report.length === 0) return;
+
+    const container = document.getElementById('analysisReportContainer');
+    const sourceCount = document.getElementById('reportSourceCount');
+    const totalSources = document.getElementById('reportTotalSources');
+    const tasksGenerated = document.getElementById('reportTasksGenerated');
+    const conversionRate = document.getElementById('reportConversionRate');
+
+    // Update summary stats
+    sourceCount.textContent = `${report.length} sources`;
+    totalSources.textContent = report.length;
+    tasksGenerated.textContent = tasksCount;
+    conversionRate.textContent = `${Math.round((tasksCount / report.length) * 100)}%`;
+
+    // Sort by score descending
+    const sortedReport = [...report].sort((a, b) => b.score - a.score);
+
+    // Store full report for filtering
+    window.currentAnalysisReport = sortedReport;
+
+    // Display report
+    renderReportTable(sortedReport);
+
+    // Show container
+    container.classList.remove('hidden');
+
+    // Add filter event listeners
+    document.getElementById('reportFilterAll').addEventListener('click', () => {
+      renderReportTable(window.currentAnalysisReport);
+    });
+
+    document.getElementById('reportFilterTasks').addEventListener('click', () => {
+      const filtered = window.currentAnalysisReport.filter(r => r.shouldEngage);
+      renderReportTable(filtered);
+    });
+
+    document.getElementById('reportFilterSkipped').addEventListener('click', () => {
+      const filtered = window.currentAnalysisReport.filter(r => !r.shouldEngage);
+      renderReportTable(filtered);
+    });
+  }
+
+  function renderReportTable(report) {
+    const tbody = document.getElementById('reportTableBody');
+
+    tbody.innerHTML = report.map(item => {
+      const scoreColor = item.score >= 9 ? 'bg-green-100 text-green-800' :
+                         item.score >= 6 ? 'bg-yellow-100 text-yellow-800' :
+                         'bg-gray-100 text-gray-600';
+
+      const engageBadge = item.shouldEngage ?
+        '<sl-badge variant="success" size="small" pill>Task</sl-badge>' :
+        '<sl-badge variant="neutral" size="small" pill>Skip</sl-badge>';
+
+      return `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="px-2 py-2">
+            <div class="flex items-center gap-2">
+              <span class="font-semibold ${scoreColor} px-2 py-1 rounded">${item.score}/12</span>
+              ${engageBadge}
+            </div>
+          </td>
+          <td class="px-2 py-2">
+            <sl-badge variant="neutral" size="small">${item.platform}</sl-badge>
+          </td>
+          <td class="px-2 py-2 text-gray-700">${item.author || 'Unknown'}</td>
+          <td class="px-2 py-2 text-gray-600">${item.reasoning}</td>
+          <td class="px-2 py-2">
+            ${item.sourceDeeplink ?
+              `<a href="${item.sourceDeeplink}" target="_blank" class="text-indigo-600 hover:underline">
+                <sl-icon name="box-arrow-up-right"></sl-icon>
+              </a>` :
+              '-'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
   async function createTaskFromSuggestion(taskIndex) {
     try {
       const response = await fetch(`/api/conversations/${window.currentConversationId}/tasks/${taskIndex}/create`, {
@@ -984,14 +1136,14 @@ Trends: ${includeTrends}`;
       const data = await response.json();
 
       if (data.success) {
-        alert('Task created successfully!');
+        showToast('Task created successfully!', 'success', 'check-circle');
         await loadConversation(window.currentConversationId);
       } else {
-        alert('Error: ' + (data.error || 'Failed to create task'));
+        showToast('Error: ' + (data.error || 'Failed to create task'), 'danger', 'exclamation-triangle');
       }
     } catch (error) {
       console.error('Create task error:', error);
-      alert('Error creating task');
+      showToast('Error creating task', 'danger', 'exclamation-triangle');
     }
   }
 
@@ -1040,7 +1192,7 @@ Trends: ${includeTrends}`;
   socket.on('task-generation:error', (data) => {
     if (data.userId === '<%= user._id %>') {
       document.getElementById('taskGenerationStatus').classList.add('hidden');
-      alert('Error generating tasks: ' + data.error);
+      showToast('Error generating tasks: ' + data.error, 'danger', 'exclamation-triangle');
     }
   });
 </script>
