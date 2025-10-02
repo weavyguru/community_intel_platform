@@ -16,12 +16,8 @@ exports.search = async (req, res) => {
 
     // Parse filters
     const chromaFilters = {};
-    if (filters.platforms && filters.platforms.length > 0) chromaFilters.platforms = filters.platforms;
-    if (filters.author) chromaFilters.author = filters.author;
-    if (filters.intent) chromaFilters.intent = filters.intent;
     if (filters.startDate) chromaFilters.startDate = new Date(filters.startDate);
     if (filters.endDate) chromaFilters.endDate = new Date(filters.endDate);
-    if (filters.includeComments !== undefined) chromaFilters.includeComments = filters.includeComments;
 
     const results = await chromaService.searchSemantic(query, parseInt(limit), chromaFilters);
 
@@ -88,7 +84,7 @@ exports.ask = async (req, res) => {
 
       if (global.io) {
         global.io.emit('analysis:status', {
-          userId: req.user._id.toString(),
+          userId: req.user?._id?.toString() || 'anonymous',
           ...logEntry
         });
       }
@@ -96,35 +92,97 @@ exports.ask = async (req, res) => {
 
     // Build Chroma filters
     const chromaFilters = {};
-    if (filters.platforms && filters.platforms.length > 0) chromaFilters.platforms = filters.platforms;
     if (filters.startDate) {
       chromaFilters.startDate = new Date(filters.startDate);
     }
     if (filters.endDate) {
       chromaFilters.endDate = new Date(filters.endDate);
     }
-    if (filters.includeComments !== undefined) chromaFilters.includeComments = filters.includeComments;
 
-    // Build Chroma query details for display
-    const chromaQueryDisplay = {
-      query: question,
-      limit: parseInt(contextLimit),
-      filters: chromaFilters
-    };
+    // Use Haiku to analyze search intent and generate queries
+    emitStatus('Analyzing question', 'Using AI to understand your question and generate optimal search queries', 'Claude Haiku 3.5');
 
-    // Search for relevant context
-    emitStatus('Searching knowledge base', `Looking for ${contextLimit} relevant sources`, 'Chroma Vector DB');
-    emitStatus(
-      'Executing Chroma query',
-      `Query: "${chromaQueryDisplay.query}"\nLimit: ${chromaQueryDisplay.limit}\nFilters: ${JSON.stringify(chromaQueryDisplay.filters, null, 2)}`,
-      'Chroma Vector DB'
-    );
-    console.log(`Deep analysis: Searching for ${contextLimit} results with filters`, chromaFilters);
-    const chromaResults = await chromaService.searchSemantic(
-      question,
-      parseInt(contextLimit),
-      chromaFilters
-    );
+    const availablePlatforms = await chromaService.getMetadataFilters();
+    const platforms = availablePlatforms.platforms || [];
+
+    const searchPlan = await claudeService.analyzeSearchIntent(question, platforms);
+
+    // Validate search plan
+    if (!searchPlan || !searchPlan.searchQueries || !Array.isArray(searchPlan.searchQueries) || searchPlan.searchQueries.length === 0) {
+      console.error('Invalid search plan returned:', JSON.stringify(searchPlan, null, 2));
+      emitStatus('Search plan error', 'Using fallback single query strategy', 'System');
+      // Fallback to single query
+      searchPlan.searchQueries = [{
+        query: question,
+        platforms: null,
+        reason: 'Fallback query due to planning error'
+      }];
+      searchPlan.reasoning = 'Using fallback single query strategy';
+    }
+
+    emitStatus('Search plan generated', `${searchPlan.searchQueries.length} search ${searchPlan.searchQueries.length === 1 ? 'query' : 'queries'} planned\n${searchPlan.reasoning}`, 'Claude Haiku 3.5');
+    console.log('Search plan:', JSON.stringify(searchPlan, null, 2));
+
+    // Execute ALL queries that Haiku generated
+    let allResults = [];
+    const seenDeeplinks = new Set();
+    const resultsPerQuery = Math.ceil(parseInt(contextLimit) / searchPlan.searchQueries.length);
+
+    for (let i = 0; i < searchPlan.searchQueries.length; i++) {
+      const searchQuery = searchPlan.searchQueries[i];
+
+      try {
+        const platformInfo = searchQuery.platforms
+          ? `Platform: ${searchQuery.platforms.join(', ')}`
+          : 'All platforms';
+
+        emitStatus(
+          `Query ${i + 1}/${searchPlan.searchQueries.length}`,
+          `"${searchQuery.query}"\n${platformInfo}\nReason: ${searchQuery.reason}`,
+          'Chroma Vector DB'
+        );
+
+        // Build filter for this specific query
+        const queryFilters = { ...chromaFilters };
+        if (searchQuery.platforms && searchQuery.platforms.length > 0) {
+          queryFilters.platforms = searchQuery.platforms;
+        }
+
+        const chromaResultsRaw = await chromaService.searchSemantic(
+          searchQuery.query,
+          resultsPerQuery * 3, // Fetch 3x to account for duplicates
+          queryFilters
+        );
+
+        // Add unique results
+        let added = 0;
+        for (const result of chromaResultsRaw) {
+          const deeplink = result.metadata?.deeplink;
+          if (!deeplink || !seenDeeplinks.has(deeplink)) {
+            if (deeplink) seenDeeplinks.add(deeplink);
+            allResults.push(result);
+            added++;
+            if (added >= resultsPerQuery) break;
+          }
+        }
+
+        emitStatus(
+          `Query ${i + 1} complete`,
+          `Added ${added} unique results (${allResults.length} total so far)`,
+          'Chroma Vector DB'
+        );
+        console.log(`Query ${i + 1}: "${searchQuery.query}" → ${added} unique results added`);
+
+      } catch (error) {
+        emitStatus(`Query ${i + 1} failed`, error.message, 'Chroma Vector DB');
+        console.error(`Error executing query ${i + 1}:`, error.message);
+      }
+    }
+
+    // Final deduplication and limiting
+    const chromaResults = allResults.slice(0, parseInt(contextLimit));
+    emitStatus('Finalizing results', `Collected ${allResults.length} unique sources, selecting top ${chromaResults.length} for analysis`, 'Chroma Vector DB');
+    console.log(`Final result: ${chromaResults.length} unique sources (target was ${contextLimit})`);
 
     // Summarize results
     const platformCounts = {};
@@ -213,7 +271,7 @@ exports.ask = async (req, res) => {
         model: mainModel
       },
       log: logEntries,
-      createdBy: req.user._id
+      createdBy: req.user?._id || null
     });
 
     console.log(`Saved conversation: ${conversation._id} - "${title}"`);

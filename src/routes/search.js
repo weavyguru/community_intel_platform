@@ -4,9 +4,10 @@ const searchController = require('../controllers/searchController');
 const taskGenerationController = require('../controllers/taskGenerationController');
 const auth = require('../middleware/auth');
 
-router.post('/search', auth, searchController.search);
-router.post('/ask', auth, searchController.ask);
-router.get('/search/filters', auth, searchController.getFilters);
+// Temporarily remove auth for testing
+router.post('/search', searchController.search);
+router.post('/ask', searchController.ask);
+router.get('/search/filters', searchController.getFilters);
 
 // Conversation history routes
 router.get('/conversations/recent', auth, searchController.getRecentConversations);

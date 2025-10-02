@@ -16,7 +16,12 @@
       "Bash(gh repo create:*)",
       "Bash(git remote remove:*)",
       "Bash(chmod:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "WebFetch(domain:docs.trychroma.com)",
+      "Bash(node:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash push:*)"
     ],
     "deny": [],
     "ask": []

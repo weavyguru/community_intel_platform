@@ -245,6 +245,90 @@ If no action needed, respond: {"needsAction": false}`;
     }
   }
 
+  async analyzeSearchIntent(question, availablePlatforms) {
+    try {
+      const client = this.getClient();
+
+      const systemPrompt = `You are a search query generator. Analyze the user's question and generate the optimal search queries to answer it.
+
+Available platforms: ${availablePlatforms.join(', ')}
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "searchQueries": [
+    {
+      "query": "optimized search query text",
+      "platforms": ["platform1", "platform2"] or null,
+      "reason": "why this specific query"
+    }
+  ],
+  "reasoning": "overall strategy explanation"
+}
+
+Rules:
+- Generate AS MANY search queries as needed to comprehensively answer the question
+- For cross-platform comparative questions (e.g., "across all platforms", "compare platforms"):
+  * Create ONE search query per platform with that platform in the "platforms" array
+  * Use the same core search term for each platform to enable fair comparison
+  * Extract the core topic/issue from the question
+- For platform-specific questions:
+  * Specify the platform(s) in the "platforms" array
+- For general questions:
+  * Use "platforms": null to search all data
+- Optimize the query text for semantic search (remove filler words, focus on key concepts)`;
+
+      const userMessage = `Generate search queries for this question:
+
+Question: "${question}"
+
+Available platforms: ${availablePlatforms.join(', ')}
+Total platforms: ${availablePlatforms.length}
+
+Examples:
+1. "What is the most common issue across platforms?" → Generate ${availablePlatforms.length} queries (one per platform) with core search: "common issue" or "problem" or "error"
+   - Query 1: {"query": "common issue", "platforms": ["${availablePlatforms[0]}"], "reason": "..."}
+   - Query 2: {"query": "common issue", "platforms": ["${availablePlatforms[1]}"], "reason": "..."}
+   - ... (one for each available platform)
+2. "How do users feel about Lovable?" → Generate 1 query with platforms: ["lovable"]
+3. "What are people saying about pricing?" → Generate 1 query with platforms: null
+
+Respond with ONLY the JSON object.`;
+
+      const response = await client.messages.create({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: userMessage
+        }]
+      });
+
+      const jsonText = response.content[0].text.trim();
+      console.log('Raw Haiku response:', jsonText);
+
+      // Remove markdown code blocks if present
+      const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      console.log('Cleaned JSON:', cleanJson);
+
+      const parsed = JSON.parse(cleanJson);
+      console.log('Parsed search plan:', JSON.stringify(parsed, null, 2));
+
+      return parsed;
+    } catch (error) {
+      console.error('Error analyzing search intent:', error);
+      console.error('Error details:', error.message);
+      // Fallback to simple single query
+      return {
+        searchQueries: [{
+          query: question,
+          platforms: null,
+          reason: 'Fallback due to intent analysis error'
+        }],
+        reasoning: 'Using fallback strategy due to error'
+      };
+    }
+  }
+
   _buildContext(results) {
     if (!results || results.length === 0) {
       return 'No relevant content found.';
