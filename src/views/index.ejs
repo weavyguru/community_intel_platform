@@ -171,13 +171,20 @@
       </sl-tooltip>
     </div>
     <form id="searchForm" class="space-y-4">
-      <div>
-        <sl-input
-          id="searchQuery"
-          placeholder="Search community content..."
-          size="large"
-          clearable
-        ></sl-input>
+      <div class="flex gap-4 items-end">
+        <div class="flex-1">
+          <sl-input
+            id="searchQuery"
+            placeholder="Search community content..."
+            size="large"
+            clearable
+          ></sl-input>
+        </div>
+
+        <sl-button type="submit" variant="primary" size="large">
+          <sl-icon slot="prefix" name="search"></sl-icon>
+          Search
+        </sl-button>
       </div>
 
       <div class="space-y-4">
@@ -198,11 +205,6 @@
             <sl-option value="custom">Custom range</sl-option>
             <sl-option value="all">All time</sl-option>
           </sl-select>
-
-          <sl-button type="submit" variant="primary" size="large">
-            <sl-icon slot="prefix" name="search"></sl-icon>
-            Search
-          </sl-button>
         </div>
 
         <!-- Custom Date Range for Search (hidden by default) -->

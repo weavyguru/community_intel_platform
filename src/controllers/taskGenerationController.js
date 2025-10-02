@@ -222,6 +222,9 @@ exports.createTaskFromSuggestion = async (req, res) => {
       }
     }
 
+    // Find the original source to get timestamp
+    const originalSource = conversation.sources.find(s => s.id === suggestedTask.sourceId);
+
     // Create the actual task
     const task = await Task.create({
       title: taskTitle,
@@ -234,6 +237,7 @@ exports.createTaskFromSuggestion = async (req, res) => {
       reasoning: suggestedTask.reasoning,
       metadata: {
         author: suggestedTask.author,
+        timestamp: originalSource?.timestamp,
         conversationId: conversation._id,
         originalPlatform: suggestedTask.platform,
         score: suggestedTask.score
