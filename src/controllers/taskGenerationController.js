@@ -231,11 +231,12 @@ exports.createTaskFromSuggestion = async (req, res) => {
       intent: 'engagement',
       priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
       suggestedResponse: suggestedTask.suggestedResponse,
+      reasoning: suggestedTask.reasoning,
       metadata: {
         author: suggestedTask.author,
-        reasoning: suggestedTask.reasoning,
         conversationId: conversation._id,
-        originalPlatform: suggestedTask.platform
+        originalPlatform: suggestedTask.platform,
+        score: suggestedTask.score
       }
     });
 

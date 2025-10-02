@@ -187,6 +187,15 @@ class EmailService {
               ${task.metadata?.author ? `<p style="color: #6B7280; font-size: 12px; margin-top: 10px;">Author: ${task.metadata.author}</p>` : ''}
             </div>
 
+            ${task.reasoning ? `
+              <div style="margin: 20px 0;">
+                <h3>Why This Matters</h3>
+                <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 15px; border-radius: 6px;">
+                  <p style="margin: 0; color: #1E40AF;">${task.reasoning}</p>
+                </div>
+              </div>
+            ` : ''}
+
             ${task.suggestedResponse ? `
               <div style="margin: 20px 0;">
                 <h3>Suggested Response</h3>
