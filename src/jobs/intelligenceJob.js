@@ -5,6 +5,8 @@ const { AgentConfig } = require('../models/AgentConfig');
 const ClaudeConversation = require('../models/ClaudeConversation');
 const Task = require('../models/Task');
 const JobRunHistory = require('../models/JobRunHistory');
+const User = require('../models/User');
+const emailService = require('../services/emailService');
 
 class IntelligenceJob {
   constructor() {
@@ -250,21 +252,48 @@ class IntelligenceJob {
       console.log(`- Tasks created: ${result.tasksCreated}`);
       console.log(`- Conversation ID: ${result.conversationId}`);
 
+      // Send success email to admins
+      try {
+        const admins = await User.find({ role: 'admin' }).lean();
+        if (admins.length > 0) {
+          await emailService.sendBackgroundJobSuccessReport(admins, result, createdTasks);
+        }
+      } catch (emailError) {
+        console.error('Error sending admin notification email:', emailError);
+        // Don't fail the job if email fails
+      }
+
       return result;
 
     } catch (error) {
       this.stats.failedRuns++;
 
+      const errorInfo = {
+        timestamp: new Date(),
+        error: error.message
+      };
+
       // Add failed run to history
       await this.addToHistory({
-        timestamp: new Date(),
+        timestamp: errorInfo.timestamp,
         success: false,
-        error: error.message
+        error: errorInfo.error
       });
 
       console.error('Intelligence Job Failed');
       console.error('Error:', error.message);
       console.error(error.stack);
+
+      // Send failure email to admins
+      try {
+        const admins = await User.find({ role: 'admin' }).lean();
+        if (admins.length > 0) {
+          await emailService.sendBackgroundJobFailureReport(admins, errorInfo);
+        }
+      } catch (emailError) {
+        console.error('Error sending admin failure notification email:', emailError);
+        // Don't fail further if email fails
+      }
 
       throw error;
     } finally {

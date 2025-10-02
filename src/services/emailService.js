@@ -243,6 +243,171 @@ class EmailService {
     }
   }
 
+  async sendBackgroundJobSuccessReport(admins, jobResult, createdTasks) {
+    try {
+      if (!admins || admins.length === 0) {
+        console.log('No admins to notify for background job success');
+        return;
+      }
+
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
+
+      // Format tasks HTML
+      let tasksHtml = '';
+      if (createdTasks && createdTasks.length > 0) {
+        tasksHtml = '<h3 style="margin-top: 20px;">Created Tasks</h3>';
+        createdTasks.forEach((task, index) => {
+          const taskUrl = `${baseUrl}/tasks?taskId=${task._id}`;
+          const priorityColor = task.priority === 'high' ? '#DC2626' : task.priority === 'medium' ? '#F59E0B' : '#10B981';
+
+          tasksHtml += `
+            <div style="border: 1px solid #E5E7EB; border-radius: 6px; padding: 15px; margin: 10px 0;">
+              <h4 style="margin: 0 0 10px 0;">${index + 1}. ${task.title}</h4>
+              <p style="color: #6B7280; margin: 5px 0; font-size: 14px;">${task.snippet?.substring(0, 150) || ''}...</p>
+              <div style="margin-top: 10px;">
+                <span style="background-color: ${priorityColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">
+                  ${task.priority?.toUpperCase()}
+                </span>
+                <span style="background-color: #DBEAFE; color: #1E40AF; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 8px;">
+                  ${task.platform}
+                </span>
+              </div>
+              <div style="margin-top: 10px;">
+                <a href="${task.sourceUrl}" target="_blank" style="color: #4F46E5; font-size: 12px; margin-right: 15px;">View Source →</a>
+                <a href="${taskUrl}" style="color: #10B981; font-size: 12px;">View Task →</a>
+              </div>
+            </div>
+          `;
+        });
+      } else {
+        tasksHtml = '<p style="color: #6B7280; font-style: italic;">No new tasks were created in this run.</p>';
+      }
+
+      const messages = admins.map(admin => ({
+        to: admin.email,
+        from: getFromEmail(),
+        subject: `Background Job Success: ${createdTasks.length} Task(s) Created`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <h2>Background Intelligence Job Report</h2>
+            <p>Hi ${admin.name},</p>
+            <p>The background intelligence job completed successfully.</p>
+
+            <div style="background-color: #D1FAE5; border-left: 4px solid #10B981; padding: 15px; margin: 20px 0;">
+              <strong>✓ Job Completed Successfully</strong>
+            </div>
+
+            <h3>Job Summary</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Last Run:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${new Date(jobResult.timestamp || Date.now()).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Posts Processed:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${jobResult.processed || 0}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Posts Analyzed:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${jobResult.analyzed || 0}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Tasks Created:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${jobResult.tasksCreated || 0}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Duration:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${jobResult.duration ? (jobResult.duration / 1000).toFixed(1) + 's' : 'N/A'}</td>
+              </tr>
+            </table>
+
+            ${tasksHtml}
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${baseUrl}/tasks" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                View All Tasks
+              </a>
+            </div>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Report</p>
+          </div>
+        `
+      }));
+
+      await sgMail.send(messages);
+      console.log(`Background job success report sent to ${admins.length} admin(s)`);
+    } catch (error) {
+      console.error('Error sending background job success report:', error);
+      // Don't throw - we don't want email failures to break the job
+    }
+  }
+
+  async sendBackgroundJobFailureReport(admins, errorInfo) {
+    try {
+      if (!admins || admins.length === 0) {
+        console.log('No admins to notify for background job failure');
+        return;
+      }
+
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
+
+      const messages = admins.map(admin => ({
+        to: admin.email,
+        from: getFromEmail(),
+        subject: '⚠️ Background Job Failed',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <h2>Background Intelligence Job Failed</h2>
+            <p>Hi ${admin.name},</p>
+            <p>The background intelligence job encountered an error and failed to complete.</p>
+
+            <div style="background-color: #FEE2E2; border-left: 4px solid #DC2626; padding: 15px; margin: 20px 0;">
+              <strong>✗ Job Failed</strong>
+            </div>
+
+            <h3>Failure Details</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Failed At:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${new Date(errorInfo.timestamp || Date.now()).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; vertical-align: top;"><strong>Error:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; word-break: break-word;">${errorInfo.error || 'Unknown error'}</td>
+              </tr>
+            </table>
+
+            <div style="background-color: #F3F4F6; border-radius: 6px; padding: 15px; margin: 20px 0;">
+              <h4 style="margin-top: 0;">Recommended Actions:</h4>
+              <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>Check server logs for detailed error information</li>
+                <li>Verify external service connectivity (Claude AI, ChromaDB)</li>
+                <li>Check API rate limits and quotas</li>
+                <li>Review recent configuration changes</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${baseUrl}/admin/bg-agent" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                View Background Agent Config
+              </a>
+            </div>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Alert</p>
+          </div>
+        `
+      }));
+
+      await sgMail.send(messages);
+      console.log(`Background job failure report sent to ${admins.length} admin(s)`);
+    } catch (error) {
+      console.error('Error sending background job failure report:', error);
+      // Don't throw - we don't want email failures to break the job
+    }
+  }
+
   generateToken() {
     return crypto.randomBytes(32).toString('hex');
   }
