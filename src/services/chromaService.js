@@ -2,10 +2,25 @@ const { getChromaClient } = require('../config/chroma');
 
 const COLLECTION_NAME = 'community_content';
 
+// Known platforms in the database (plain text for semantic search)
+const KNOWN_PLATFORMS = [
+  'floot',
+  'orchids',
+  'lovable',
+  'replit',
+  'base44',
+  'v0',
+  'appsmith',
+  'retool',
+  'bolt',
+  'refine'
+];
+
 class ChromaService {
   constructor() {
     this.client = null;
     this.collection = null;
+    this.platformCache = new Set(); // Cache discovered platforms
   }
 
   async initialize() {
@@ -25,35 +40,48 @@ class ChromaService {
 
       const where = this._buildWhereClause(filters);
 
-      // If time filtering is needed, get more results and filter post-query
-      const queryLimit = (filters.startDate || filters.endDate) ? limit * 3 : limit;
-
       const results = await this.collection.query({
         queryTexts: [query.toLowerCase()],
-        nResults: queryLimit,
+        nResults: limit,
         where: Object.keys(where).length > 0 ? where : undefined
       });
 
-      let formattedResults = this._formatResults(results);
+      // Debug logging
+      console.log(`Chroma query returned: ${results.ids ? results.ids[0]?.length || 0 : 0} results`);
+      if (results.ids && results.ids[0]?.length > 0) {
+        // Check for duplicates by deeplink and count platforms
+        const deeplinks = results.metadatas[0].map(m => m.deeplink).filter(Boolean);
+        const uniqueDeeplinks = new Set(deeplinks);
+        const platformCounts = {};
+        const commentCounts = { posts: 0, comments: 0, unknown: 0 };
+        results.metadatas[0].forEach(m => {
+          const platform = m.platform || 'unknown';
+          platformCounts[platform] = (platformCounts[platform] || 0) + 1;
 
-      // Post-query time filtering if needed
-      if (filters.startDate || filters.endDate) {
-        formattedResults = formattedResults.filter(result => {
-          if (!result.metadata?.timestamp) return true; // Keep if no timestamp
-
-          const timestamp = new Date(result.metadata.timestamp);
-
-          if (filters.startDate && timestamp < filters.startDate) return false;
-          if (filters.endDate && timestamp > filters.endDate) return false;
-
-          return true;
+          // Count is_comment values
+          if (m.is_comment === true) commentCounts.comments++;
+          else if (m.is_comment === false) commentCounts.posts++;
+          else commentCounts.unknown++;
         });
+        console.log(`Total results: ${results.ids[0].length}, Unique deeplinks: ${uniqueDeeplinks.size}`);
+        console.log(`Platforms in results:`, platformCounts);
+        console.log(`is_comment breakdown:`, commentCounts);
 
-        // Trim to requested limit after filtering
-        formattedResults = formattedResults.slice(0, limit);
+        // Sample first result's metadata
+        if (results.metadatas[0].length > 0) {
+          console.log(`Sample metadata:`, {
+            is_comment: results.metadatas[0][0].is_comment,
+            is_comment_type: typeof results.metadatas[0][0].is_comment,
+            platform: results.metadatas[0][0].platform,
+            deeplink: results.metadatas[0][0].deeplink
+          });
+        }
+
+        // Log the where clause being used
+        console.log(`Where clause used:`, JSON.stringify(where));
       }
 
-      return formattedResults;
+      return this._formatResults(results);
     } catch (error) {
       console.error('Error in semantic search:', error);
       throw error;
@@ -81,12 +109,16 @@ class ChromaService {
     try {
       await this.initialize();
 
+      // Convert dates to Unix timestamps (seconds since epoch)
+      const startUnix = Math.floor(startDate.getTime() / 1000);
+      const endUnix = Math.floor(endDate.getTime() / 1000);
+
       const results = await this.collection.get({
         where: {
-          timestamp: {
-            $gte: startDate.toISOString(),
-            $lte: endDate.toISOString()
-          }
+          $and: [
+            { timestamp_unix: { $gte: startUnix } },
+            { timestamp_unix: { $lte: endUnix } }
+          ]
         },
         limit
       });
@@ -118,33 +150,13 @@ class ChromaService {
   }
 
   async getMetadataFilters() {
-    try {
-      await this.initialize();
-
-      // Get a sample of documents to extract unique metadata values
-      const results = await this.collection.get({
-        limit: 1000
-      });
-
-      const platforms = new Set();
-      const authors = new Set();
-      const intents = new Set();
-
-      results.metadatas.forEach(metadata => {
-        if (metadata.platform) platforms.add(metadata.platform);
-        if (metadata.author) authors.add(metadata.author);
-        if (metadata.intent) intents.add(metadata.intent);
-      });
-
-      return {
-        platforms: Array.from(platforms),
-        authors: Array.from(authors),
-        intents: Array.from(intents)
-      };
-    } catch (error) {
-      console.error('Error getting metadata filters:', error);
-      throw error;
-    }
+    // Return hardcoded platform list
+    console.log(`Using known platforms (${KNOWN_PLATFORMS.length}):`, KNOWN_PLATFORMS);
+    return {
+      platforms: KNOWN_PLATFORMS,
+      authors: [],
+      intents: []
+    };
   }
 
   async addDocuments(documents) {
@@ -170,36 +182,41 @@ class ChromaService {
   }
 
   _buildWhereClause(filters) {
-    const where = {};
+    const conditions = [];
 
-    // Handle platforms array with $in operator (lowercase for case-insensitive matching)
+    // Date filtering using timestamp_unix
+    if (filters.startDate || filters.endDate) {
+      if (filters.startDate && filters.endDate) {
+        const startUnix = Math.floor(filters.startDate.getTime() / 1000);
+        const endUnix = Math.floor(filters.endDate.getTime() / 1000);
+        conditions.push({
+          $and: [
+            { timestamp_unix: { $gte: startUnix } },
+            { timestamp_unix: { $lte: endUnix } }
+          ]
+        });
+      } else if (filters.startDate) {
+        const startUnix = Math.floor(filters.startDate.getTime() / 1000);
+        conditions.push({ timestamp_unix: { $gte: startUnix } });
+      } else if (filters.endDate) {
+        const endUnix = Math.floor(filters.endDate.getTime() / 1000);
+        conditions.push({ timestamp_unix: { $lte: endUnix } });
+      }
+    }
+
+    // Platform filtering
     if (filters.platforms && filters.platforms.length > 0) {
-      where.platform = { $in: filters.platforms.map(p => p.toLowerCase()) };
+      conditions.push({ platform: { $in: filters.platforms } });
     }
 
-    if (filters.author) {
-      where.author = { $eq: filters.author };
+    // Combine conditions
+    if (conditions.length === 0) {
+      return {};
+    } else if (conditions.length === 1) {
+      return conditions[0];
+    } else {
+      return { $and: conditions };
     }
-
-    if (filters.intent) {
-      where.intent = { $eq: filters.intent };
-    }
-
-    // Handle is_comment filter based on includeComments
-    if (filters.includeComments === false) {
-      // Only posts (is_comment = false)
-      where.is_comment = { $eq: false };
-    } else if (filters.includeComments === true) {
-      // Only comments (is_comment = true)
-      where.is_comment = { $eq: true };
-    }
-    // If undefined, no filter - want everything
-
-    // Note: Time-based filtering is done post-query in the results
-    // because Chroma's where clause may not support complex timestamp queries
-    // depending on the collection's metadata structure
-
-    return where;
   }
 
   _formatResults(results) {
@@ -208,13 +225,38 @@ class ChromaService {
     }
 
     const formatted = [];
+    const seenDeeplinks = new Set();
+
     for (let i = 0; i < results.ids[0].length; i++) {
+      const distance = results.distances ? results.distances[0][i] : null;
+      const deeplink = results.metadatas[0][i]?.deeplink;
+      const metadata = results.metadatas[0][i];
+
+      // Skip duplicates based on deeplink
+      if (deeplink && seenDeeplinks.has(deeplink)) {
+        continue;
+      }
+      if (deeplink) {
+        seenDeeplinks.add(deeplink);
+      }
+
+      // Chroma returns L2 (Euclidean) distance by default
+      // Lower distance = more similar (0 = identical)
+      // Convert to a similarity score: we'll just use negative distance so lower is better
+      // This preserves the ordering and makes it clear that lower = better match
+      const relevanceScore = distance !== null ? -distance : null;
+
+      // Cache platform for future queries
+      if (metadata.platform) {
+        this.platformCache.add(metadata.platform);
+      }
+
       formatted.push({
         id: results.ids[0][i],
         content: results.documents[0][i],
-        metadata: results.metadatas[0][i],
-        distance: results.distances ? results.distances[0][i] : null,
-        relevanceScore: results.distances ? (1 - results.distances[0][i]) : null
+        metadata: metadata,
+        distance: distance,
+        relevanceScore: relevanceScore
       });
     }
 

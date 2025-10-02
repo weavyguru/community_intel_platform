@@ -82,43 +82,8 @@
       </div>
 
       <div class="space-y-4">
-        <!-- First row: Filters, Analysis Depth, Time Range -->
+        <!-- First row: Analysis Depth, Time Range -->
         <div class="flex items-center gap-4 flex-wrap">
-          <sl-dropdown id="askFiltersDropdown" hoist>
-            <sl-button slot="trigger" caret>
-              <sl-icon slot="prefix" name="funnel"></sl-icon>
-              Filters
-            </sl-button>
-            <sl-menu>
-              <div class="p-4" style="min-width: 300px;">
-                <div class="mb-4">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
-                  <div class="space-y-2 max-h-48 overflow-y-auto">
-                    <sl-checkbox class="ask-platform" value="Lovable" checked>Lovable</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Replit" checked>Replit</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="v0" checked>v0</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Bolt" checked>Bolt</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Floot" checked>Floot</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Orchids" checked>Orchids</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Base44" checked>Base44</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Retool" checked>Retool</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Refine" checked>Refine</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Appsmith" checked>Appsmith</sl-checkbox>
-                    <sl-checkbox class="ask-platform" value="Vibe coder" checked>Vibe coder</sl-checkbox>
-                  </div>
-                </div>
-                <sl-divider></sl-divider>
-                <div class="mt-4">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                  <div class="space-y-2">
-                    <sl-checkbox class="ask-type" value="post" checked>Post</sl-checkbox>
-                    <sl-checkbox class="ask-type" value="comment">Comments</sl-checkbox>
-                  </div>
-                </div>
-              </div>
-            </sl-menu>
-          </sl-dropdown>
-
           <sl-select id="analysisDepth" value="standard" style="min-width: 200px; width: auto;">
             <sl-option value="quick">Quick (10 results)</sl-option>
             <sl-option value="standard">Standard (25 results)</sl-option>
@@ -132,8 +97,21 @@
             <sl-option value="90">Last 90 days</sl-option>
             <sl-option value="180">Last 6 months</sl-option>
             <sl-option value="365">Last year</sl-option>
+            <sl-option value="custom">Custom range</sl-option>
             <sl-option value="all">All time</sl-option>
           </sl-select>
+        </div>
+
+        <!-- Custom Date Range (hidden by default) -->
+        <div id="customDateRange" class="hidden flex items-center gap-4 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">From</label>
+            <sl-input id="askStartDate" type="date" style="min-width: 150px;"></sl-input>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">To</label>
+            <sl-input id="askEndDate" type="date" style="min-width: 150px;"></sl-input>
+          </div>
         </div>
 
         <!-- Second row: Checkboxes, Recent, and Analyze button -->
@@ -202,53 +180,42 @@
         ></sl-input>
       </div>
 
-      <div class="flex gap-4">
-        <sl-dropdown id="searchFiltersDropdown" hoist>
-          <sl-button slot="trigger" caret>
-            <sl-icon slot="prefix" name="funnel"></sl-icon>
-            Filters
+      <div class="space-y-4">
+        <div class="flex gap-4 flex-wrap">
+          <sl-select id="limitSelect" value="10" style="min-width: 150px; width: auto;">
+            <sl-option value="5">5 results</sl-option>
+            <sl-option value="10">10 results</sl-option>
+            <sl-option value="20">20 results</sl-option>
+            <sl-option value="50">50 results</sl-option>
+          </sl-select>
+
+          <sl-select id="searchTimeRange" value="all" style="min-width: 150px; width: auto;">
+            <sl-option value="7">Last 7 days</sl-option>
+            <sl-option value="30">Last 30 days</sl-option>
+            <sl-option value="90">Last 90 days</sl-option>
+            <sl-option value="180">Last 6 months</sl-option>
+            <sl-option value="365">Last year</sl-option>
+            <sl-option value="custom">Custom range</sl-option>
+            <sl-option value="all">All time</sl-option>
+          </sl-select>
+
+          <sl-button type="submit" variant="primary" size="large">
+            <sl-icon slot="prefix" name="search"></sl-icon>
+            Search
           </sl-button>
-          <sl-menu>
-            <div class="p-4" style="min-width: 300px;">
-              <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
-                <div class="space-y-2 max-h-48 overflow-y-auto">
-                  <sl-checkbox class="search-platform" value="Lovable" checked>Lovable</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Replit" checked>Replit</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="v0" checked>v0</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Bolt" checked>Bolt</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Floot" checked>Floot</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Orchids" checked>Orchids</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Base44" checked>Base44</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Retool" checked>Retool</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Refine" checked>Refine</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Appsmith" checked>Appsmith</sl-checkbox>
-                  <sl-checkbox class="search-platform" value="Vibe coder" checked>Vibe coder</sl-checkbox>
-                </div>
-              </div>
-              <sl-divider></sl-divider>
-              <div class="mt-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                <div class="space-y-2">
-                  <sl-checkbox class="search-type" value="post" checked>Post</sl-checkbox>
-                  <sl-checkbox class="search-type" value="comment">Comments</sl-checkbox>
-                </div>
-              </div>
-            </div>
-          </sl-menu>
-        </sl-dropdown>
+        </div>
 
-        <sl-select id="limitSelect" value="10">
-          <sl-option value="5">5 results</sl-option>
-          <sl-option value="10">10 results</sl-option>
-          <sl-option value="20">20 results</sl-option>
-          <sl-option value="50">50 results</sl-option>
-        </sl-select>
-
-        <sl-button type="submit" variant="primary" size="large">
-          <sl-icon slot="prefix" name="search"></sl-icon>
-          Search
-        </sl-button>
+        <!-- Custom Date Range for Search (hidden by default) -->
+        <div id="searchCustomDateRange" class="hidden flex items-center gap-4 flex-wrap">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">From</label>
+            <sl-input id="searchStartDate" type="date" style="min-width: 150px;"></sl-input>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">To</label>
+            <sl-input id="searchEndDate" type="date" style="min-width: 150px;"></sl-input>
+          </div>
+        </div>
       </div>
     </form>
 
@@ -393,24 +360,7 @@
 
     const query = document.getElementById('searchQuery').value;
     const limit = document.getElementById('limitSelect').value;
-
-    // Get checked platforms
-    const platformCheckboxes = document.querySelectorAll('.search-platform');
-    const allPlatforms = Array.from(platformCheckboxes).map(cb => cb.value);
-    const checkedPlatforms = Array.from(platformCheckboxes)
-      .filter(cb => cb.checked)
-      .map(cb => cb.value);
-
-    // If all platforms are checked, don't send filter (keep it simple for Chroma)
-    const platforms = checkedPlatforms.length === allPlatforms.length ? [] : checkedPlatforms;
-
-    // Get checked types
-    const typeCheckboxes = document.querySelectorAll('.search-type');
-    const postChecked = Array.from(typeCheckboxes).find(cb => cb.value === 'post')?.checked || false;
-    const commentChecked = Array.from(typeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
-
-    // If both or neither are checked, don't filter (want everything)
-    const includeComments = (postChecked && commentChecked) ? undefined : commentChecked;
+    const searchTimeRange = document.getElementById('searchTimeRange').value;
 
     if (!query) {
       alert('Please enter a search query');
@@ -421,24 +371,59 @@
     resultsDiv.innerHTML = '<sl-spinner></sl-spinner> Searching...';
 
     // Build filter object for tooltip
-    const filters = {
-      platforms: platforms.length > 0 ? platforms : undefined,
-      includeComments
-    };
+    const filters = {};
+
+    // Add time range filter
+    if (searchTimeRange === 'custom') {
+      const startDateInput = document.getElementById('searchStartDate').value;
+      const endDateInput = document.getElementById('searchEndDate').value;
+      if (startDateInput) {
+        filters.startDate = new Date(startDateInput).toISOString();
+      }
+      if (endDateInput) {
+        const endDate = new Date(endDateInput);
+        endDate.setHours(23, 59, 59, 999);
+        filters.endDate = endDate.toISOString();
+      }
+    } else if (searchTimeRange !== 'all') {
+      const days = parseInt(searchTimeRange);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      filters.startDate = startDate.toISOString();
+    }
 
     // Build Chroma where clause visualization
     let whereClause = {};
-    if (filters.platforms && filters.platforms.length > 0) {
-      whereClause.platform = { $in: filters.platforms.map(p => p.toLowerCase()) };
+    if (filters.startDate && filters.endDate) {
+      const startUnix = Math.floor(new Date(filters.startDate).getTime() / 1000);
+      const endUnix = Math.floor(new Date(filters.endDate).getTime() / 1000);
+      whereClause = {
+        $and: [
+          { timestamp_unix: { $gte: startUnix } },
+          { timestamp_unix: { $lte: endUnix } }
+        ]
+      };
+    } else if (filters.startDate) {
+      const startUnix = Math.floor(new Date(filters.startDate).getTime() / 1000);
+      whereClause = { timestamp_unix: { $gte: startUnix } };
+    } else if (filters.endDate) {
+      const endUnix = Math.floor(new Date(filters.endDate).getTime() / 1000);
+      whereClause = { timestamp_unix: { $lte: endUnix } };
     }
-    if (filters.includeComments === false) {
-      whereClause.is_comment = { $eq: false };
-    } else if (filters.includeComments === true) {
-      whereClause.is_comment = { $eq: true };
+
+    let timeFilterDesc = 'none';
+    if (searchTimeRange === 'custom') {
+      const parts = [];
+      if (filters.startDate) parts.push(`from ${new Date(filters.startDate).toLocaleDateString()}`);
+      if (filters.endDate) parts.push(`to ${new Date(filters.endDate).toLocaleDateString()}`);
+      timeFilterDesc = parts.join(' ');
+    } else if (searchTimeRange !== 'all') {
+      timeFilterDesc = `Last ${searchTimeRange} days`;
     }
 
     const tooltipContent = `Query: "${query.toLowerCase()}"
 Limit: ${limit}
+Time Filter: ${timeFilterDesc}
 Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null, 2) : 'none'}`;
 
     document.getElementById('searchParamsTooltip').content = tooltipContent;
@@ -463,11 +448,22 @@ Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null,
           ${data.results.map(result => `
             <div class="border rounded-lg p-4 mb-3">
               <div class="flex items-center justify-between mb-2">
-                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${result.metadata.platform || 'Unknown'}</span>
+                <div class="flex items-center gap-2">
+                  <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${result.metadata.platform || 'Unknown'}</span>
+                  ${result.metadata.timestamp ? `<span class="text-xs text-gray-500">${new Date(result.metadata.timestamp).toLocaleDateString()}</span>` : ''}
+                </div>
                 <span class="text-xs text-gray-500">Relevance: ${(result.relevanceScore * 100).toFixed(1)}%</span>
               </div>
               <p class="text-sm text-gray-700">${result.content}</p>
-              ${result.metadata.author ? `<p class="text-xs text-gray-500 mt-2">By ${result.metadata.author}</p>` : ''}
+              <div class="mt-2 flex items-center gap-2">
+                ${result.metadata.author ? `<span class="text-xs text-gray-500">By ${result.metadata.author}</span>` : ''}
+                ${result.metadata.deeplink ? `
+                  <a href="${result.metadata.deeplink}" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1">
+                    <sl-icon name="box-arrow-up-right" style="font-size: 10px;"></sl-icon>
+                    View Source
+                  </a>
+                ` : ''}
+              </div>
             </div>
           `).join('')}
         `;
@@ -495,24 +491,6 @@ Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null,
     const timeRange = document.getElementById('timeRange').value;
     const includePatterns = document.getElementById('includePatterns').checked;
     const includeTrends = document.getElementById('includeTrends').checked;
-
-    // Get checked platforms
-    const askPlatformCheckboxes = document.querySelectorAll('.ask-platform');
-    const allPlatforms = Array.from(askPlatformCheckboxes).map(cb => cb.value);
-    const checkedPlatforms = Array.from(askPlatformCheckboxes)
-      .filter(cb => cb.checked)
-      .map(cb => cb.value);
-
-    // If all platforms are checked, don't send filter (keep it simple for Chroma)
-    const platforms = checkedPlatforms.length === allPlatforms.length ? [] : checkedPlatforms;
-
-    // Get checked types
-    const askTypeCheckboxes = document.querySelectorAll('.ask-type');
-    const postChecked = Array.from(askTypeCheckboxes).find(cb => cb.value === 'post')?.checked || false;
-    const commentChecked = Array.from(askTypeCheckboxes).find(cb => cb.value === 'comment')?.checked || false;
-
-    // If both or neither are checked, don't filter (want everything)
-    const includeComments = (postChecked && commentChecked) ? undefined : commentChecked;
 
     // Map depth to result count
     const depthMap = {
@@ -546,30 +524,22 @@ Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null,
       };
 
       // Add time range filter
-      if (timeRange !== 'all') {
+      if (timeRange === 'custom') {
+        const startDateInput = document.getElementById('askStartDate').value;
+        const endDateInput = document.getElementById('askEndDate').value;
+        if (startDateInput) {
+          requestBody.filters.startDate = new Date(startDateInput).toISOString();
+        }
+        if (endDateInput) {
+          const endDate = new Date(endDateInput);
+          endDate.setHours(23, 59, 59, 999);
+          requestBody.filters.endDate = endDate.toISOString();
+        }
+      } else if (timeRange !== 'all') {
         const days = parseInt(timeRange);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
         requestBody.filters.startDate = startDate.toISOString();
-      }
-
-      // Add platform filter
-      if (platforms.length > 0) {
-        requestBody.filters.platforms = platforms;
-      }
-
-      // Add type filter
-      requestBody.filters.includeComments = includeComments;
-
-      // Build Chroma where clause visualization
-      let whereClause = {};
-      if (requestBody.filters.platforms && requestBody.filters.platforms.length > 0) {
-        whereClause.platform = { $in: requestBody.filters.platforms.map(p => p.toLowerCase()) };
-      }
-      if (requestBody.filters.includeComments === false) {
-        whereClause.is_comment = { $eq: false };
-      } else if (requestBody.filters.includeComments === true) {
-        whereClause.is_comment = { $eq: true };
       }
 
       const response = await fetch('/api/ask', {
@@ -582,10 +552,19 @@ Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null,
       const data = await response.json();
 
       // Update tooltip with actual query params after response
+      let timeFilterDesc = 'none';
+      if (timeRange === 'custom') {
+        const parts = [];
+        if (requestBody.filters.startDate) parts.push(`from ${new Date(requestBody.filters.startDate).toLocaleDateString()}`);
+        if (requestBody.filters.endDate) parts.push(`to ${new Date(requestBody.filters.endDate).toLocaleDateString()}`);
+        timeFilterDesc = parts.join(' ');
+      } else if (timeRange !== 'all') {
+        timeFilterDesc = `Last ${timeRange} days`;
+      }
+
       const tooltipContent = `Query: "${question.toLowerCase()}"
 Limit: ${contextLimit}
-Time Filter: ${timeRange === 'all' ? 'none' : `startDate >= ${requestBody.filters.startDate}`}
-Where: ${Object.keys(whereClause).length > 0 ? JSON.stringify(whereClause, null, 2) : 'none'}
+Time Filter: ${timeFilterDesc}
 Patterns: ${includePatterns}
 Trends: ${includeTrends}`;
 
@@ -829,6 +808,26 @@ Trends: ${includeTrends}`;
       historyList.innerHTML = '<p class="text-center text-red-600 py-8">Error loading conversations</p>';
     }
   }
+
+  // Toggle custom date range visibility for Ask Claude
+  document.getElementById('timeRange')?.addEventListener('sl-change', (e) => {
+    const customDateRange = document.getElementById('customDateRange');
+    if (e.target.value === 'custom') {
+      customDateRange.classList.remove('hidden');
+    } else {
+      customDateRange.classList.add('hidden');
+    }
+  });
+
+  // Toggle custom date range visibility for Search
+  document.getElementById('searchTimeRange')?.addEventListener('sl-change', (e) => {
+    const searchCustomDateRange = document.getElementById('searchCustomDateRange');
+    if (e.target.value === 'custom') {
+      searchCustomDateRange.classList.remove('hidden');
+    } else {
+      searchCustomDateRange.classList.add('hidden');
+    }
+  });
 
   // Load counts and history on page load
   document.addEventListener('DOMContentLoaded', () => {
