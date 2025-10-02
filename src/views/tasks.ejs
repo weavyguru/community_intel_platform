@@ -23,12 +23,10 @@
         <sl-option value="low">Low</sl-option>
       </sl-select>
 
-      <sl-select id="platformFilter" placeholder="All Platforms" value="">
-        <sl-option value="">All Platforms</sl-option>
-        <sl-option value="Discord">Discord</sl-option>
-        <sl-option value="Reddit">Reddit</sl-option>
-        <sl-option value="X">X (Twitter)</sl-option>
-        <sl-option value="LinkedIn">LinkedIn</sl-option>
+      <sl-select id="delegationFilter" placeholder="All Tasks" value="">
+        <sl-option value="">All Tasks</sl-option>
+        <sl-option value="delegated">Delegated</sl-option>
+        <sl-option value="not-delegated">Not Delegated</sl-option>
       </sl-select>
 
       <sl-button onclick="loadTasks()" variant="primary" class="w-full">
@@ -98,12 +96,11 @@
   async function loadTasks() {
     const status = document.getElementById('statusFilter').value;
     const priority = document.getElementById('priorityFilter').value;
-    const platform = document.getElementById('platformFilter').value;
+    const delegation = document.getElementById('delegationFilter').value;
 
     const params = new URLSearchParams();
     if (status) params.append('completed', status);
     if (priority) params.append('priority', priority);
-    if (platform) params.append('platform', platform);
 
     const tasksList = document.getElementById('tasksList');
     tasksList.innerHTML = '<div class="text-center py-8"><sl-spinner></sl-spinner></div>';
@@ -113,8 +110,29 @@
       const data = await response.json();
 
       if (data.success) {
-        currentTasks = data.tasks;
-        renderTasks(data.tasks);
+        let filteredTasks = data.tasks;
+
+        // Apply delegation filter client-side
+        if (delegation === 'delegated') {
+          filteredTasks = filteredTasks.filter(task => task.delegatedTo);
+        } else if (delegation === 'not-delegated') {
+          filteredTasks = filteredTasks.filter(task => !task.delegatedTo);
+        }
+
+        // Sort: delegated first, then by priority (high→medium→low)
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+        filteredTasks.sort((a, b) => {
+          // First, sort by delegation status (delegated first)
+          const aDelegated = a.delegatedTo ? 0 : 1;
+          const bDelegated = b.delegatedTo ? 0 : 1;
+          if (aDelegated !== bDelegated) return aDelegated - bDelegated;
+
+          // Then sort by priority
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        });
+
+        currentTasks = filteredTasks;
+        renderTasks(filteredTasks);
         checkUrlParams();
       } else {
         tasksList.innerHTML = '<p class="text-red-600 text-center">Error loading tasks</p>';
