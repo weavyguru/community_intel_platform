@@ -167,6 +167,22 @@
     }
   }
 
+  function formatPostDate(timestamp) {
+    if (!timestamp) return null;
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+    return `${Math.floor(diffDays / 365)}y ago`;
+  }
+
   function renderTasks(tasks) {
     const tasksList = document.getElementById('tasksList');
 
@@ -177,6 +193,7 @@
 
     tasksList.innerHTML = tasks.map(task => {
       const snippetPreview = task.snippet.length > 100 ? task.snippet.substring(0, 100) + '...' : task.snippet;
+      const postDate = formatPostDate(task.metadata?.timestamp);
 
       return `
       <div id="task-${task._id}" class="bg-white rounded-lg shadow p-4 mb-3 task-card" data-task-id="${task._id}" data-expanded="false">
@@ -195,6 +212,7 @@
                       ${task.priority.toUpperCase()}
                     </span>
                     ${task.platform ? `<span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">${task.platform}</span>` : ''}
+                    ${postDate ? `<span class="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">📅 ${postDate}</span>` : ''}
                     ${task.isCompleted && task.completedBy ? `<span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ ${task.completedBy.name}</span>` : ''}
                     ${task.delegatedTo && !task.isCompleted ? `<span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">→ ${task.delegatedTo.name}</span>` : ''}
                   </div>
