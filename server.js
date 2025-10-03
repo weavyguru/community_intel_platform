@@ -290,9 +290,13 @@ const server = app.listen(PORT, () => {
   // Make io available globally BEFORE starting job
   global.io = io;
 
-  // Start intelligence job (now global.io is available)
-  intelligenceJob.start();
-  console.log('Intelligence job started');
+  // Start intelligence job only in production
+  if (process.env.NODE_ENV === 'production') {
+    intelligenceJob.start();
+    console.log('Intelligence job started');
+  } else {
+    console.log('Intelligence job disabled in development mode');
+  }
 });
 
 // Graceful shutdown
