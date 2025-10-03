@@ -30,6 +30,9 @@ const auth = require('./src/middleware/auth');
 
 const app = express();
 
+// Trust proxy - required for Railway and other reverse proxies
+app.set('trust proxy', 1);
+
 // Connect to database
 connectDB();
 

@@ -91,9 +91,12 @@ class IntelligenceJob {
     this.isRunning = true;
     this.stats.totalRuns++;
 
+    const jobStartTime = Date.now();
+    const jobTimestamp = new Date();
+
     console.log('='.repeat(60));
     console.log('Intelligence Job Execution Started');
-    console.log(`Time: ${new Date().toISOString()}`);
+    console.log(`Time: ${jobTimestamp.toISOString()}`);
     console.log(`Mode: ${isManual ? 'Manual' : 'Scheduled'}`);
     console.log('='.repeat(60));
 
@@ -139,11 +142,17 @@ class IntelligenceJob {
         this.stats.successfulRuns++;
         this.lastSuccessfulRun = endDate;
 
-        const result = { processed: 0, tasksCreated: 0, conversationId: null };
+        const result = {
+          processed: 0,
+          tasksCreated: 0,
+          conversationId: null,
+          duration: Date.now() - jobStartTime,
+          timestamp: jobTimestamp
+        };
 
         // Add to run history
         await this.addToHistory({
-          timestamp: endDate,
+          timestamp: jobTimestamp,
           success: true,
           result
         });
@@ -181,11 +190,17 @@ class IntelligenceJob {
         this.stats.successfulRuns++;
         this.lastSuccessfulRun = endDate;
 
-        const result = { processed: allContent.length, tasksCreated: 0, conversationId: null };
+        const result = {
+          processed: allContent.length,
+          tasksCreated: 0,
+          conversationId: null,
+          duration: Date.now() - jobStartTime,
+          timestamp: jobTimestamp
+        };
 
         // Add to run history
         await this.addToHistory({
-          timestamp: endDate,
+          timestamp: jobTimestamp,
           success: true,
           result
         });
@@ -278,12 +293,13 @@ class IntelligenceJob {
         analyzed: newContent.length,
         tasksCreated: createdTasks.length,
         conversationId: conversation._id,
-        duration: Date.now() - analysisStartTime
+        duration: Date.now() - jobStartTime,
+        timestamp: jobTimestamp
       };
 
       // Add to run history
       await this.addToHistory({
-        timestamp: new Date(),
+        timestamp: jobTimestamp,
         success: true,
         result
       });
@@ -311,13 +327,13 @@ class IntelligenceJob {
       this.stats.failedRuns++;
 
       const errorInfo = {
-        timestamp: new Date(),
+        timestamp: jobTimestamp,
         error: error.message
       };
 
       // Add failed run to history
       await this.addToHistory({
-        timestamp: errorInfo.timestamp,
+        timestamp: jobTimestamp,
         success: false,
         error: errorInfo.error
       });
