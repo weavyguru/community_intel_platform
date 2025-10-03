@@ -18,6 +18,7 @@
         <sl-option value="">All Status</sl-option>
         <sl-option value="false">Open</sl-option>
         <sl-option value="true">Completed</sl-option>
+        <sl-option value="skipped">Skipped</sl-option>
       </sl-select>
 
       <sl-select id="priorityFilter" placeholder="All Priorities" value="">
@@ -83,6 +84,16 @@
     <div slot="footer" class="flex gap-2 justify-end">
       <sl-button id="cancelDeleteBtn" variant="default">Cancel</sl-button>
       <sl-button id="confirmDeleteBtn" variant="danger">Delete</sl-button>
+    </div>
+  </sl-dialog>
+
+  <!-- Skip Confirmation Dialog -->
+  <sl-dialog id="skipTaskDialog" label="Skip Task">
+    <p>Mark this as reviewed but not engaging? It will stay in the system to prevent regeneration.</p>
+    <sl-textarea id="skipReasonInput" placeholder="Optional: Why are we skipping this?" rows="2"></sl-textarea>
+    <div slot="footer" class="flex gap-2 justify-end">
+      <sl-button id="cancelSkipBtn" variant="default">Cancel</sl-button>
+      <sl-button id="confirmSkipBtn" variant="warning">Skip Task</sl-button>
     </div>
   </sl-dialog>
 </div>
@@ -255,7 +266,8 @@
                     </span>
                     ${postDate ? `<span class="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded">📅 ${postDate}</span>` : ''}
                     ${task.isCompleted && task.completedBy ? `<span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">✓ ${task.completedBy.name}</span>` : ''}
-                    ${task.delegatedTo && !task.isCompleted ? `<span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">→ ${task.delegatedTo.name}</span>` : ''}
+                    ${task.isSkipped && task.skippedBy ? `<span class="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">⊘ SKIPPED by ${task.skippedBy.name}</span>` : ''}
+                    ${task.delegatedTo && !task.isCompleted && !task.isSkipped ? `<span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">→ ${task.delegatedTo.name}</span>` : ''}
                   </div>
                 </div>
                 <sl-icon-button name="chevron-down" class="task-expand-icon" label="Expand task"></sl-icon-button>
@@ -274,7 +286,18 @@
 
                 ${task.metadata?.author ? `<p class="text-xs text-gray-500 mb-1">Author: ${task.metadata.author}</p>` : ''}
                 ${task.isCompleted && task.completedBy ? `<p class="text-xs text-gray-500 mb-1">Completed by ${task.completedBy.name} on ${new Date(task.completedAt).toLocaleDateString()}</p>` : ''}
-                ${task.delegatedTo ? `<p class="text-xs text-indigo-600 mb-1">Delegated to ${task.delegatedTo.name} on ${new Date(task.delegatedAt).toLocaleDateString()}</p>` : ''}
+                ${task.isSkipped && task.skippedBy ? `<p class="text-xs text-orange-600 mb-1">Skipped by ${task.skippedBy.name} on ${new Date(task.skippedAt).toLocaleDateString()}</p>` : ''}
+                ${task.delegatedTo && !task.isSkipped ? `<p class="text-xs text-indigo-600 mb-1">Delegated to ${task.delegatedTo.name} on ${new Date(task.delegatedAt).toLocaleDateString()}</p>` : ''}
+
+                ${task.skippedReason ? `
+                  <div class="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <div class="flex items-center gap-2 mb-2">
+                      <sl-icon name="info-circle" class="text-orange-600"></sl-icon>
+                      <span class="text-xs font-semibold text-orange-800">Why This Was Skipped</span>
+                    </div>
+                    <p class="text-sm text-gray-700">${task.skippedReason}</p>
+                  </div>
+                ` : ''}
 
                 ${task.reasoning ? `
                   <div class="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -308,10 +331,21 @@
                     ` : ''}
                   </div>
                   <div class="flex gap-2">
-                    <sl-button variant="default" size="small" data-edit-task="${task._id}">
-                      <sl-icon slot="prefix" name="pencil"></sl-icon>
-                      Edit
-                    </sl-button>
+                    ${!task.isSkipped ? `
+                      <sl-button variant="default" size="small" data-edit-task="${task._id}">
+                        <sl-icon slot="prefix" name="pencil"></sl-icon>
+                        Edit
+                      </sl-button>
+                      <sl-button variant="warning" size="small" data-skip-task="${task._id}">
+                        <sl-icon slot="prefix" name="x-circle"></sl-icon>
+                        Skip
+                      </sl-button>
+                    ` : `
+                      <sl-button variant="default" size="small" data-unskip-task="${task._id}">
+                        <sl-icon slot="prefix" name="arrow-counterclockwise"></sl-icon>
+                        Unskip
+                      </sl-button>
+                    `}
                     <sl-button variant="danger" size="small" data-delete-task="${task._id}">
                       <sl-icon slot="prefix" name="trash"></sl-icon>
                       Delete
@@ -374,6 +408,22 @@
         button.addEventListener('click', (e) => {
           const taskId = e.currentTarget.getAttribute('data-edit-task');
           editTask(taskId);
+        });
+      });
+
+      // Skip task buttons
+      document.querySelectorAll('[data-skip-task]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-skip-task');
+          skipTask(taskId);
+        });
+      });
+
+      // Unskip task buttons
+      document.querySelectorAll('[data-unskip-task]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-unskip-task');
+          unskipTask(taskId);
         });
       });
     }, 100);
@@ -517,6 +567,91 @@
   }
 
   let taskToDelete = null;
+  let taskToSkip = null;
+
+  function skipTask(taskId) {
+    taskToSkip = taskId;
+    document.getElementById('skipReasonInput').value = '';
+    const dialog = document.getElementById('skipTaskDialog');
+    dialog.show();
+  }
+
+  async function confirmSkipTask() {
+    if (!taskToSkip) return;
+
+    const taskId = taskToSkip;
+    const reason = document.getElementById('skipReasonInput').value.trim();
+    const dialog = document.getElementById('skipTaskDialog');
+
+    // Close dialog immediately
+    dialog.hide();
+    taskToSkip = null;
+
+    // Optimistically remove from DOM
+    const taskCard = document.getElementById(`task-${taskId}`);
+    if (taskCard) {
+      taskCard.style.opacity = '0.5';
+      taskCard.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => {
+        taskCard.remove();
+      }, 300);
+    }
+
+    // Skip in backend (badge will update via socket event)
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/skip`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || undefined })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Task skipped successfully', 'warning', 'x-circle');
+      } else {
+        console.error('Skip failed:', data);
+        showToast(data.error || 'Error skipping task', 'danger', 'exclamation-triangle');
+        // Reload tasks if backend skip failed
+        loadTasks();
+      }
+    } catch (error) {
+      console.error('Error skipping task:', error);
+      showToast('Error skipping task: ' + error.message, 'danger', 'exclamation-triangle');
+      // Reload tasks if there was an error
+      loadTasks();
+    }
+  }
+
+  async function unskipTask(taskId) {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/unskip`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Task unskipped successfully', 'success', 'check-circle');
+        loadTasks();
+      } else {
+        console.error('Unskip failed:', data);
+        showToast(data.error || 'Error unskipping task', 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Error unskipping task:', error);
+      showToast('Error unskipping task: ' + error.message, 'danger', 'exclamation-triangle');
+    }
+  }
 
   function editTask(taskId) {
     const task = currentTasks.find(t => t._id === taskId);
@@ -625,6 +760,13 @@
   document.getElementById('cancelDeleteBtn').addEventListener('click', () => {
     taskToDelete = null;
     document.getElementById('deleteTaskDialog').hide();
+  });
+
+  // Skip dialog event listeners
+  document.getElementById('confirmSkipBtn').addEventListener('click', confirmSkipTask);
+  document.getElementById('cancelSkipBtn').addEventListener('click', () => {
+    taskToSkip = null;
+    document.getElementById('skipTaskDialog').hide();
   });
 
   // Handle task form submission (create or update)

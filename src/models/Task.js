@@ -10,6 +10,10 @@ const taskSchema = new mongoose.Schema({
   isCompleted: { type: Boolean, default: false },
   completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   completedAt: Date,
+  isSkipped: { type: Boolean, default: false },
+  skippedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  skippedAt: Date,
+  skippedReason: String,
   delegatedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   delegatedAt: Date,
   suggestedResponse: String,
@@ -29,7 +33,7 @@ const taskSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-taskSchema.index({ isCompleted: 1, priority: -1, createdAt: -1 });
+taskSchema.index({ isCompleted: 1, isSkipped: 1, priority: -1, createdAt: -1 });
 taskSchema.index({ platform: 1 });
 taskSchema.index({ intent: 1 });
 

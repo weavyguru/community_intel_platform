@@ -60,9 +60,19 @@ exports.getTasks = async (req, res) => {
 
     const query = {};
 
-    if (completed !== undefined) {
-      query.isCompleted = completed === 'true';
+    // Handle status filter: 'false' = Open (not completed, not skipped), 'true' = Completed, 'skipped' = Skipped
+    if (completed === 'false') {
+      // Open tasks: not completed AND not skipped (use $ne to handle undefined/null/false)
+      query.isCompleted = false;
+      query.isSkipped = { $ne: true };
+    } else if (completed === 'true') {
+      // Completed tasks
+      query.isCompleted = true;
+    } else if (completed === 'skipped') {
+      // Skipped tasks
+      query.isSkipped = true;
     }
+    // If completed is undefined or empty string, show all tasks
 
     if (priority) {
       query.priority = priority;
@@ -81,7 +91,8 @@ exports.getTasks = async (req, res) => {
       .limit(parseInt(limit))
       .skip(parseInt(skip))
       .populate('completedBy', 'name email')
-      .populate('delegatedTo', 'name email');
+      .populate('delegatedTo', 'name email')
+      .populate('skippedBy', 'name email');
 
     const total = await Task.countDocuments(query);
 
@@ -102,7 +113,8 @@ exports.getTasks = async (req, res) => {
 // @access  Private
 exports.getTaskCount = async (req, res) => {
   try {
-    const count = await Task.countDocuments({ isCompleted: false });
+    // Count only tasks that are not completed AND not skipped
+    const count = await Task.countDocuments({ isCompleted: false, isSkipped: { $ne: true } });
 
     res.json({
       success: true,
@@ -119,7 +131,8 @@ exports.getTaskCount = async (req, res) => {
 // @access  Private
 exports.getTaskStats = async (req, res) => {
   try {
-    const openCount = await Task.countDocuments({ isCompleted: false });
+    // Open count: not completed AND not skipped
+    const openCount = await Task.countDocuments({ isCompleted: false, isSkipped: { $ne: true } });
 
     // Get completed today count
     const startOfDay = new Date();
@@ -129,9 +142,10 @@ exports.getTaskStats = async (req, res) => {
       completedAt: { $gte: startOfDay }
     });
 
-    // Get high priority count
+    // Get high priority count (only open tasks)
     const highPriorityCount = await Task.countDocuments({
       isCompleted: false,
+      isSkipped: { $ne: true },
       priority: 'high'
     });
 
@@ -331,6 +345,82 @@ exports.updatePriority = async (req, res) => {
   } catch (error) {
     console.error('Update priority error:', error);
     res.status(500).json({ error: 'Error updating task priority' });
+  }
+};
+
+// @desc    Skip task (reviewed but not engaging)
+// @route   PUT /api/tasks/:id/skip
+// @access  Private
+exports.skipTask = async (req, res) => {
+  try {
+    const { reason } = req.body;
+
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    task.isSkipped = true;
+    task.skippedBy = req.user._id;
+    task.skippedAt = Date.now();
+    if (reason) {
+      task.skippedReason = reason;
+    }
+    await task.save();
+
+    await task.populate('skippedBy', 'name email');
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:updated', {
+        taskId: task._id.toString(),
+        isSkipped: true
+      });
+    }
+
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    console.error('Skip task error:', error);
+    res.status(500).json({ error: 'Error skipping task' });
+  }
+};
+
+// @desc    Unskip task
+// @route   PUT /api/tasks/:id/unskip
+// @access  Private
+exports.unskipTask = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    task.isSkipped = false;
+    task.skippedBy = undefined;
+    task.skippedAt = undefined;
+    task.skippedReason = undefined;
+    await task.save();
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:updated', {
+        taskId: task._id.toString(),
+        isSkipped: false
+      });
+    }
+
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    console.error('Unskip task error:', error);
+    res.status(500).json({ error: 'Error unskipping task' });
   }
 };
 
