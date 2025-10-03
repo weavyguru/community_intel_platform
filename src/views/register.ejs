@@ -80,7 +80,7 @@
   </div>
 
   <!-- Verification Email Modal -->
-  <sl-dialog id="verificationDialog" label="Check Your Email">
+  <sl-dialog id="verificationDialog" label="Check Your Email" no-header>
     <div class="space-y-4">
       <div class="flex items-center justify-center">
         <sl-icon name="envelope-check" style="font-size: 4rem; color: var(--sl-color-success-600);"></sl-icon>
@@ -92,9 +92,6 @@
         Please check your inbox and click the verification link to activate your account.
       </p>
     </div>
-    <sl-button slot="footer" variant="primary" onclick="document.getElementById('verificationDialog').hide(); window.location.href = '/login';">
-      Go to Login
-    </sl-button>
   </sl-dialog>
 
   <script>
