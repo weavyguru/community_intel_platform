@@ -138,7 +138,28 @@ class IntelligenceJob {
         emitStatus('No content found', 'No new content to analyze in time range');
         this.stats.successfulRuns++;
         this.lastSuccessfulRun = endDate;
-        return { processed: 0, tasksCreated: 0, conversationId: null };
+
+        const result = { processed: 0, tasksCreated: 0, conversationId: null };
+
+        // Add to run history
+        await this.addToHistory({
+          timestamp: endDate,
+          success: true,
+          result
+        });
+
+        // Send no-content email to admins
+        try {
+          const admins = await User.find({ role: 'admin' }).lean();
+          if (admins.length > 0) {
+            await emailService.sendBackgroundJobNoContentReport(admins, result);
+          }
+        } catch (emailError) {
+          console.error('Error sending admin no-content notification email:', emailError);
+          // Don't fail the job if email fails
+        }
+
+        return result;
       }
 
       emitStatus('Content retrieved', `Found ${allContent.length} items from Chroma`);
@@ -159,7 +180,28 @@ class IntelligenceJob {
         console.log('No new unique content after deduplication');
         this.stats.successfulRuns++;
         this.lastSuccessfulRun = endDate;
-        return { processed: allContent.length, tasksCreated: 0, conversationId: null };
+
+        const result = { processed: allContent.length, tasksCreated: 0, conversationId: null };
+
+        // Add to run history
+        await this.addToHistory({
+          timestamp: endDate,
+          success: true,
+          result
+        });
+
+        // Send no-content email to admins
+        try {
+          const admins = await User.find({ role: 'admin' }).lean();
+          if (admins.length > 0) {
+            await emailService.sendBackgroundJobNoContentReport(admins, result);
+          }
+        } catch (emailError) {
+          console.error('Error sending admin no-content notification email:', emailError);
+          // Don't fail the job if email fails
+        }
+
+        return result;
       }
 
       // STEP 4: Load agent configurations

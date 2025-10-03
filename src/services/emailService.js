@@ -408,6 +408,73 @@ class EmailService {
     }
   }
 
+  async sendBackgroundJobNoContentReport(admins, jobResult) {
+    try {
+      if (!admins || admins.length === 0) {
+        console.log('No admins to notify for background job no content');
+        return;
+      }
+
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3002}`;
+
+      const messages = admins.map(admin => ({
+        to: admin.email,
+        from: getFromEmail(),
+        subject: 'Background Job Complete: No New Content',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+            <h2>Background Intelligence Job Report</h2>
+            <p>Hi ${admin.name},</p>
+            <p>The background intelligence job ran successfully but found no new content to analyze.</p>
+
+            <div style="background-color: #E0E7FF; border-left: 4px solid #6366F1; padding: 15px; margin: 20px 0;">
+              <strong>✓ Job Completed - No New Activity</strong>
+            </div>
+
+            <h3>Job Summary</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Last Run:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${new Date().toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Posts Found:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${jobResult.processed || 0}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>New Posts:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">0 (all previously analyzed)</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;"><strong>Status:</strong></td>
+                <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">The job is running on schedule</td>
+              </tr>
+            </table>
+
+            <p style="color: #6B7280; font-style: italic; margin: 20px 0;">
+              This is normal during quiet periods. You'll receive a detailed report when new content is found and analyzed.
+            </p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${baseUrl}/admin/bg-agent" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                View Background Agent Config
+              </a>
+            </div>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Report</p>
+          </div>
+        `
+      }));
+
+      await sgMail.send(messages);
+      console.log(`Background job no-content report sent to ${admins.length} admin(s)`);
+    } catch (error) {
+      console.error('Error sending background job no-content report:', error);
+      // Don't throw - we don't want email failures to break the job
+    }
+  }
+
   generateToken() {
     return crypto.randomBytes(32).toString('hex');
   }
