@@ -127,8 +127,8 @@ exports.ask = async (req, res) => {
     }
 
     // Get the main model being used
-    const mainModel = process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
-    const mainModelName = 'Claude Opus 4';
+    const mainModel = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
+    const mainModelName = 'Claude Sonnet 4.5';
 
     // STEP 1: Analyze search intent with Opus 4
     emitStatus('Analyzing question', `Using ${mainModelName} to understand your question and generate comprehensive search strategy`, mainModel);

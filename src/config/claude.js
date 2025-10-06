@@ -16,7 +16,7 @@ const getClaudeClient = () => {
 };
 
 const getClaudeModel = () => {
-  return process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
+  return process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929';
 };
 
 module.exports = { getClaudeClient, getClaudeModel };

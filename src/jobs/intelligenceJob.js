@@ -262,7 +262,7 @@ class IntelligenceJob {
         usage: {
           inputTokens: response.usage?.input_tokens,
           outputTokens: response.usage?.output_tokens,
-          model: process.env.CLAUDE_MODEL || 'claude-opus-4-20250514'
+          model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929'
         },
         backgroundGenerated: true,
         createdBy: null

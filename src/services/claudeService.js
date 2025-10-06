@@ -335,7 +335,7 @@ Respond ONLY with valid JSON:
     try {
       const client = this.getClient();
 
-      const systemPrompt = `You are an expert search strategist using Claude Opus 4. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
+      const systemPrompt = `You are an expert search strategist using Claude Sonnet 4.5. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
 
 Available platforms: ${availablePlatforms.join(', ')}
 
