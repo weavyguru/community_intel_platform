@@ -22,7 +22,7 @@
   </div>
 
   <!-- Quick Stats -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
     <div class="bg-white rounded-lg shadow p-6">
       <div class="flex items-center">
         <div class="flex-shrink-0 bg-indigo-100 rounded-md p-3">
@@ -58,6 +58,18 @@
         </div>
       </div>
     </div>
+
+    <a href="/tasks?delegation=delegated&completed=false" class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow p-6 hover:shadow-lg transition-shadow border-2 border-purple-200">
+      <div class="flex items-center">
+        <div class="flex-shrink-0 bg-purple-100 rounded-md p-3">
+          <sl-icon name="person-check" class="text-2xl text-purple-600"></sl-icon>
+        </div>
+        <div class="ml-4">
+          <p class="text-sm font-medium text-purple-700">Delegated (Open)</p>
+          <p id="delegatedNotDoneCount" class="text-2xl font-semibold text-purple-900">-</p>
+        </div>
+      </div>
+    </a>
   </div>
 
   <!-- Ask Section -->
@@ -415,6 +427,7 @@
         document.getElementById('openTasksCount').textContent = data.stats.open;
         document.getElementById('completedTodayCount').textContent = data.stats.completedToday;
         document.getElementById('highPriorityCount').textContent = data.stats.highPriority;
+        document.getElementById('delegatedNotDoneCount').textContent = data.stats.delegatedNotDone;
       }
     } catch (error) {
       console.error('Error loading task stats:', error);

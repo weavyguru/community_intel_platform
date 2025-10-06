@@ -200,6 +200,27 @@
     }
   }
 
+  function setFiltersFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const delegation = urlParams.get('delegation');
+    const completed = urlParams.get('completed');
+
+    // Pre-select filters based on URL params
+    if (delegation) {
+      const delegationFilter = document.getElementById('delegationFilter');
+      if (delegationFilter && delegation === 'delegated') {
+        delegationFilter.value = 'delegated';
+      }
+    }
+
+    if (completed !== null) {
+      const statusFilter = document.getElementById('statusFilter');
+      if (statusFilter) {
+        statusFilter.value = completed;
+      }
+    }
+  }
+
   function checkUrlParams() {
     const urlParams = new URLSearchParams(window.location.search);
     const taskId = urlParams.get('taskId');
@@ -925,6 +946,7 @@
   });
 
   // Load users and tasks on page load
+  setFiltersFromUrl();
   loadUsers().then(() => loadTasks());
 </script>
 

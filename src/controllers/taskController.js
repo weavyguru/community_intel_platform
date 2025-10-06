@@ -149,12 +149,20 @@ exports.getTaskStats = async (req, res) => {
       priority: 'high'
     });
 
+    // Get delegated tasks that are not done
+    const delegatedNotDoneCount = await Task.countDocuments({
+      delegatedTo: { $exists: true, $ne: null },
+      isCompleted: false,
+      isSkipped: { $ne: true }
+    });
+
     res.json({
       success: true,
       stats: {
         open: openCount,
         completedToday: completedTodayCount,
-        highPriority: highPriorityCount
+        highPriority: highPriorityCount,
+        delegatedNotDone: delegatedNotDoneCount
       }
     });
   } catch (error) {
