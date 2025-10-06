@@ -249,7 +249,7 @@ exports.createTaskFromSuggestion = async (req, res) => {
       if (task) {
         // Update existing task with new information
         task.title = taskTitle;
-        task.snippet = suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning;
+        task.snippet = suggestedTask.sourceContent || suggestedTask.reasoning;
         task.priority = priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low');
         task.suggestedResponse = suggestedTask.suggestedResponse;
         task.reasoning = suggestedTask.reasoning;
@@ -266,7 +266,7 @@ exports.createTaskFromSuggestion = async (req, res) => {
         // Fallback if existing task not found - create new one
         task = await Task.create({
           title: taskTitle,
-          snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
+          snippet: suggestedTask.sourceContent || suggestedTask.reasoning,
           sourceUrl: suggestedTask.sourceDeeplink || '#',
           platform: mappedPlatform,
           intent: 'engagement',
@@ -286,7 +286,7 @@ exports.createTaskFromSuggestion = async (req, res) => {
       // Create new task
       task = await Task.create({
         title: taskTitle,
-        snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
+        snippet: suggestedTask.sourceContent || suggestedTask.reasoning,
         sourceUrl: suggestedTask.sourceDeeplink || '#',
         platform: mappedPlatform,
         intent: 'engagement',
