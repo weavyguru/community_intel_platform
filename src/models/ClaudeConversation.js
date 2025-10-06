@@ -55,6 +55,8 @@ const claudeConversationSchema = new mongoose.Schema({
     relevanceScore: Number,
     status: { type: String, enum: ['pending', 'accepted', 'rejected', 'created'], default: 'pending' },
     createdTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
+    isDuplicate: { type: Boolean, default: false },
+    existingTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },
     generatedAt: Date
   }],
   taskGenerationReport: [{

@@ -253,10 +253,15 @@
           <sl-badge id="reportSourceCount" variant="neutral" pill>0 sources</sl-badge>
         </div>
 
+        <!-- Duplicate Summary Message -->
+        <div id="duplicateSummaryMessage" class="hidden mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800">
+          <strong>Note:</strong> <span id="duplicateSummaryText"></span>
+        </div>
+
         <div class="mt-3 space-y-3">
           <!-- Summary Stats -->
           <div class="p-3 bg-blue-50 rounded border border-blue-200">
-            <div class="grid grid-cols-3 gap-4 text-center text-sm">
+            <div class="grid grid-cols-4 gap-4 text-center text-sm">
               <div>
                 <div class="font-semibold text-gray-900" id="reportTotalSources">-</div>
                 <div class="text-xs text-gray-600">Sources Analyzed</div>
@@ -264,6 +269,10 @@
               <div>
                 <div class="font-semibold text-green-600" id="reportTasksGenerated">-</div>
                 <div class="text-xs text-gray-600">Tasks Generated</div>
+              </div>
+              <div>
+                <div class="font-semibold text-orange-600" id="reportDuplicates">-</div>
+                <div class="text-xs text-gray-600">Already Detected</div>
               </div>
               <div>
                 <div class="font-semibold text-indigo-600" id="reportConversionRate">-%</div>
@@ -795,7 +804,8 @@ Trends: ${includeTrends}`;
 
           // Display analysis report if available
           if (conv.taskGenerationReport && conv.taskGenerationReport.length > 0) {
-            displayAnalysisReport(conv.taskGenerationReport, conv.suggestedTasks.length);
+            const duplicateCount = conv.suggestedTasks.filter(t => t.isDuplicate).length;
+            displayAnalysisReport(conv.taskGenerationReport, conv.suggestedTasks.length, duplicateCount);
           }
         } else {
           genTasksBtn.style.display = 'inline-flex';
@@ -1017,13 +1027,21 @@ Trends: ${includeTrends}`;
     container.classList.remove('hidden');
 
     list.innerHTML = tasks.map((task, index) => `
-      <div class="p-3 bg-white rounded border border-gray-300">
+      <div class="p-3 bg-white rounded border ${task.isDuplicate ? 'border-orange-300 bg-orange-50' : 'border-gray-300'}">
         <div class="flex items-center justify-between mb-2">
-          <sl-badge variant="${task.shouldEngage ? 'success' : 'neutral'}" pill>
-            ${task.shouldEngage ? '✓ Engage' : 'Skip'} (Score: ${task.score}/12)
-          </sl-badge>
+          <div class="flex items-center gap-2">
+            <sl-badge variant="${task.shouldEngage ? 'success' : 'neutral'}" pill>
+              ${task.shouldEngage ? '✓ Engage' : 'Skip'} (Score: ${task.score}/12)
+            </sl-badge>
+            ${task.isDuplicate ? `<sl-badge variant="warning" pill>⚠ Already Detected</sl-badge>` : ''}
+          </div>
           <sl-badge variant="neutral">${task.platform}</sl-badge>
         </div>
+        ${task.isDuplicate ? `
+          <div class="mb-2 p-2 bg-orange-100 border border-orange-200 rounded text-xs text-orange-800">
+            <strong>Note:</strong> This task already exists in the system. ${task.existingTaskId ? `<a href="/tasks?taskId=${task.existingTaskId}" target="_blank" class="underline">View existing task</a>.` : ''} Creating this will replace the existing task with updated information.
+          </div>
+        ` : ''}
         <p class="text-xs text-gray-600 mb-2"><strong>${task.author}</strong></p>
         <p class="text-xs text-gray-700 mb-2">${task.reasoning}</p>
         ${task.suggestedResponse ? `
@@ -1059,12 +1077,12 @@ Trends: ${includeTrends}`;
         ` : ''}
         <div class="mt-3 flex gap-2">
           ${task.status === 'pending' && task.shouldEngage ? `
-            <sl-button size="small" variant="primary" class="create-task-btn" data-task-index="${index}">
-              <sl-icon slot="prefix" name="plus"></sl-icon>
-              Create Task
+            <sl-button size="small" variant="${task.isDuplicate ? 'warning' : 'primary'}" class="create-task-btn" data-task-index="${index}">
+              <sl-icon slot="prefix" name="${task.isDuplicate ? 'arrow-repeat' : 'plus'}"></sl-icon>
+              ${task.isDuplicate ? 'Replace Existing Task' : 'Create Task'}
             </sl-button>
           ` : task.status === 'created' ? `
-            <sl-badge variant="success">✓ Task Created</sl-badge>
+            <sl-badge variant="success">✓ Task ${task.isDuplicate ? 'Updated' : 'Created'}</sl-badge>
           ` : ''}
           ${task.status === 'pending' ? `
             <sl-button size="small" variant="default" class="skip-task-btn" data-task-index="${index}">
@@ -1078,20 +1096,32 @@ Trends: ${includeTrends}`;
     `).join('');
   }
 
-  function displayAnalysisReport(report, tasksCount) {
+  function displayAnalysisReport(report, tasksCount, duplicateCount = 0) {
     if (!report || report.length === 0) return;
 
     const container = document.getElementById('analysisReportContainer');
     const sourceCount = document.getElementById('reportSourceCount');
     const totalSources = document.getElementById('reportTotalSources');
     const tasksGenerated = document.getElementById('reportTasksGenerated');
+    const reportDuplicates = document.getElementById('reportDuplicates');
     const conversionRate = document.getElementById('reportConversionRate');
 
     // Update summary stats
     sourceCount.textContent = `${report.length} sources`;
     totalSources.textContent = report.length;
     tasksGenerated.textContent = tasksCount;
+    reportDuplicates.textContent = duplicateCount;
     conversionRate.textContent = `${Math.round((tasksCount / report.length) * 100)}%`;
+
+    // Show duplicate summary message if there are duplicates
+    const duplicateSummaryDiv = document.getElementById('duplicateSummaryMessage');
+    const duplicateSummaryText = document.getElementById('duplicateSummaryText');
+    if (duplicateCount > 0) {
+      duplicateSummaryText.textContent = `Of the ${tasksCount} tasks generated in this analysis, ${duplicateCount} ${duplicateCount === 1 ? 'was' : 'were'} already detected by our background job.`;
+      duplicateSummaryDiv.classList.remove('hidden');
+    } else {
+      duplicateSummaryDiv.classList.add('hidden');
+    }
 
     // Sort by score descending
     const sortedReport = [...report].sort((a, b) => b.score - a.score);

@@ -116,6 +116,15 @@ exports.generateTasks = async (req, res) => {
 
         // Only add to suggested tasks if should engage
         if (taskAnalysis && taskAnalysis.shouldEngage) {
+          // Check if task with same deeplink already exists
+          let existingTask = null;
+          let isDuplicate = false;
+
+          if (source.deeplink) {
+            existingTask = await Task.findOne({ sourceUrl: source.deeplink });
+            isDuplicate = !!existingTask;
+          }
+
           suggestedTasks.push({
             sourceId: source.id,
             sourceContent: source.content,
@@ -128,6 +137,8 @@ exports.generateTasks = async (req, res) => {
             suggestedResponse: taskAnalysis.suggestedResponse,
             relevanceScore: source.relevanceScore,
             status: 'pending',
+            isDuplicate: isDuplicate,
+            existingTaskId: existingTask?._id,
             generatedAt: new Date()
           });
         }
@@ -155,11 +166,15 @@ exports.generateTasks = async (req, res) => {
       });
     }
 
+    // Count duplicates
+    const duplicateCount = suggestedTasks.filter(t => t.isDuplicate).length;
+
     res.json({
       success: true,
       suggestedTasks,
       totalAnalyzed: sourcesToAnalyze.length,
-      tasksGenerated: suggestedTasks.length
+      tasksGenerated: suggestedTasks.length,
+      duplicateCount: duplicateCount
     });
 
   } catch (error) {
@@ -225,24 +240,68 @@ exports.createTaskFromSuggestion = async (req, res) => {
     // Find the original source to get timestamp
     const originalSource = conversation.sources.find(s => s.id === suggestedTask.sourceId);
 
-    // Create the actual task
-    const task = await Task.create({
-      title: taskTitle,
-      snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
-      sourceUrl: suggestedTask.sourceDeeplink || '#',
-      platform: mappedPlatform,
-      intent: 'engagement',
-      priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
-      suggestedResponse: suggestedTask.suggestedResponse,
-      reasoning: suggestedTask.reasoning,
-      metadata: {
-        author: suggestedTask.author,
-        timestamp: originalSource?.timestamp,
-        conversationId: conversation._id,
-        originalPlatform: suggestedTask.platform,
-        score: suggestedTask.score
+    let task;
+
+    // If this is a duplicate, update the existing task instead of creating new one
+    if (suggestedTask.isDuplicate && suggestedTask.existingTaskId) {
+      task = await Task.findById(suggestedTask.existingTaskId);
+
+      if (task) {
+        // Update existing task with new information
+        task.title = taskTitle;
+        task.snippet = suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning;
+        task.priority = priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low');
+        task.suggestedResponse = suggestedTask.suggestedResponse;
+        task.reasoning = suggestedTask.reasoning;
+        task.metadata = {
+          ...task.metadata,
+          author: suggestedTask.author,
+          timestamp: originalSource?.timestamp,
+          conversationId: conversation._id,
+          originalPlatform: suggestedTask.platform,
+          score: suggestedTask.score
+        };
+        await task.save();
+      } else {
+        // Fallback if existing task not found - create new one
+        task = await Task.create({
+          title: taskTitle,
+          snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
+          sourceUrl: suggestedTask.sourceDeeplink || '#',
+          platform: mappedPlatform,
+          intent: 'engagement',
+          priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
+          suggestedResponse: suggestedTask.suggestedResponse,
+          reasoning: suggestedTask.reasoning,
+          metadata: {
+            author: suggestedTask.author,
+            timestamp: originalSource?.timestamp,
+            conversationId: conversation._id,
+            originalPlatform: suggestedTask.platform,
+            score: suggestedTask.score
+          }
+        });
       }
-    });
+    } else {
+      // Create new task
+      task = await Task.create({
+        title: taskTitle,
+        snippet: suggestedTask.sourceContent?.substring(0, 300) || suggestedTask.reasoning,
+        sourceUrl: suggestedTask.sourceDeeplink || '#',
+        platform: mappedPlatform,
+        intent: 'engagement',
+        priority: priority || (suggestedTask.score >= 10 ? 'high' : suggestedTask.score >= 7 ? 'medium' : 'low'),
+        suggestedResponse: suggestedTask.suggestedResponse,
+        reasoning: suggestedTask.reasoning,
+        metadata: {
+          author: suggestedTask.author,
+          timestamp: originalSource?.timestamp,
+          conversationId: conversation._id,
+          originalPlatform: suggestedTask.platform,
+          score: suggestedTask.score
+        }
+      });
+    }
 
     // Update suggested task status
     conversation.suggestedTasks[parseInt(taskIndex)].status = 'created';
