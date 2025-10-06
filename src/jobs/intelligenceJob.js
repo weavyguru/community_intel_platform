@@ -227,7 +227,7 @@ class IntelligenceJob {
         throw new Error('Agent configurations not found (ask or create-tasks)');
       }
 
-      // STEP 5: Run Ask Agent analysis (skip query strategy, use all content)
+      // STEP 5: Run Ask Agent analysis with auto-split if needed
       emitStatus('Running Ask Agent', 'Analyzing content with Claude AI...');
       const question = `Analyze the community content from the last ${this.lastSuccessfulRun ? 'time period' : '4 hours'}. What are the key themes, issues, and opportunities?`;
       const instructions = askConfig.instructions || 'You are a helpful AI assistant analyzing community feedback.';
@@ -237,37 +237,21 @@ class IntelligenceJob {
 
       try {
         const analysisStartTime = Date.now();
-        response = await claudeService.askWithContext(question, newContent, instructions);
+        response = await this.runAskAgentWithAutoSplit(question, newContent, instructions, emitStatus);
         analysisTime = Date.now() - analysisStartTime;
         emitStatus('Ask Agent complete', `Analysis completed in ${(analysisTime / 1000).toFixed(1)}s`);
       } catch (error) {
-        // Handle token limit errors gracefully - continue with task generation
-        if (error.message && error.message.includes('too long')) {
-          console.warn('⚠ Ask Agent skipped: Content exceeds token limit');
-          console.warn(`Content size: ${newContent.length} items`);
-          emitStatus('Ask Agent skipped', `Content too large (${newContent.length} items), proceeding with task generation...`);
+        // For errors that couldn't be resolved by splitting, continue with task generation
+        console.error('Ask Agent error:', error.message);
+        emitStatus('Ask Agent error', `Analysis failed: ${error.message}. Continuing with task generation...`);
 
-          // Create a simple summary instead
-          response = {
-            answer: `Analysis skipped due to content size (${newContent.length} items). Task generation will continue with individual source analysis.`,
-            usage: {
-              input_tokens: 0,
-              output_tokens: 0
-            }
-          };
-        } else {
-          // For other errors, log but still try to continue
-          console.error('Ask Agent error:', error.message);
-          emitStatus('Ask Agent error', `Analysis failed: ${error.message}. Continuing with task generation...`);
-
-          response = {
-            answer: `Analysis failed: ${error.message}. Task generation will continue.`,
-            usage: {
-              input_tokens: 0,
-              output_tokens: 0
-            }
-          };
-        }
+        response = {
+          answer: `Analysis failed: ${error.message}. Task generation will continue with individual source analysis.`,
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0
+          }
+        };
       }
 
       // STEP 6: Generate title and save conversation
@@ -580,6 +564,84 @@ Return your analysis in the following JSON format:
     } catch (error) {
       console.error('Error parsing task analysis response:', error);
       return null;
+    }
+  }
+
+  async runAskAgentWithAutoSplit(question, content, instructions, emitStatus, depth = 0) {
+    const maxDepth = 4; // Max 16 parts (2^4)
+
+    try {
+      // Try normal analysis
+      const response = await claudeService.askWithContext(question, content, instructions);
+      return response;
+
+    } catch (error) {
+      // Only split if it's a token limit error and we haven't split too deep
+      if (!error.message || !error.message.includes('too long')) {
+        throw error; // Not a token error, re-throw
+      }
+
+      if (depth >= maxDepth) {
+        console.error(`Maximum split depth (${maxDepth}) reached. Content still too large.`);
+        throw new Error(`Content too large even after ${Math.pow(2, maxDepth)} splits`);
+      }
+
+      // Split content in half
+      const mid = Math.floor(content.length / 2);
+      const half1 = content.slice(0, mid);
+      const half2 = content.slice(mid);
+
+      const parts = Math.pow(2, depth + 1);
+      console.log(`⚠ Token limit hit. Splitting content into ${parts} parts (depth ${depth + 1})...`);
+      if (emitStatus) {
+        emitStatus('Splitting analysis', `Content too large, analyzing in ${parts} parts...`);
+      }
+
+      // Recursively analyze each half
+      const result1 = await this.runAskAgentWithAutoSplit(question, half1, instructions, emitStatus, depth + 1);
+      const result2 = await this.runAskAgentWithAutoSplit(question, half2, instructions, emitStatus, depth + 1);
+
+      // Merge the two analyses
+      if (emitStatus) {
+        emitStatus('Merging analyses', `Combining ${parts} analyses into one...`);
+      }
+      return await this.mergeAnalyses(result1, result2);
+    }
+  }
+
+  async mergeAnalyses(result1, result2) {
+    const mergePrompt = `You previously analyzed two separate batches of community content. Here are both analyses:
+
+ANALYSIS 1:
+${result1.answer}
+
+ANALYSIS 2:
+${result2.answer}
+
+Please combine these into a single coherent analysis. Synthesize the insights, avoid repetition, and highlight the most important themes across both batches. Provide a comprehensive unified analysis.`;
+
+    try {
+      const merged = await claudeService.askSimple(mergePrompt);
+
+      return {
+        answer: merged.answer,
+        usage: {
+          input_tokens: (result1.usage?.input_tokens || 0) + (result2.usage?.input_tokens || 0) + (merged.usage?.input_tokens || 0),
+          output_tokens: (result1.usage?.output_tokens || 0) + (result2.usage?.output_tokens || 0) + (merged.usage?.output_tokens || 0)
+        },
+        sources: [...(result1.sources || []), ...(result2.sources || [])]
+      };
+    } catch (error) {
+      console.error('Error merging analyses:', error);
+      // Fallback: concatenate the analyses
+      return {
+        answer: `${result1.answer}\n\n---\n\n${result2.answer}`,
+        usage: {
+          input_tokens: (result1.usage?.input_tokens || 0) + (result2.usage?.input_tokens || 0),
+          output_tokens: (result1.usage?.output_tokens || 0) + (result2.usage?.output_tokens || 0)
+        },
+        sources: [...(result1.sources || []), ...(result2.sources || [])]
+      };
     }
   }
 

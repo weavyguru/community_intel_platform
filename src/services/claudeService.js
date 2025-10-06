@@ -224,6 +224,27 @@ If no action needed, respond: {"needsAction": false}`;
     }
   }
 
+  async askSimple(prompt) {
+    try {
+      const response = await this._callClaudeWithRetry({
+        model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929',
+        messages: [{
+          role: 'user',
+          content: prompt
+        }],
+        max_tokens: 4096
+      });
+
+      return {
+        answer: response.content[0].text,
+        usage: response.usage
+      };
+    } catch (error) {
+      console.error('Error in askSimple:', error);
+      throw error;
+    }
+  }
+
   async generateTitle(question) {
     try {
       const client = this.getClient();
