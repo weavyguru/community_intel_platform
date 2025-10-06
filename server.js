@@ -116,7 +116,13 @@ app.get('/api/users', auth, taskController.getUsers);
 app.get('/', auth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('index', {
       title: 'Home - Community Intelligence',
@@ -133,7 +139,13 @@ app.get('/', auth, async (req, res) => {
 app.get('/tasks', auth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('tasks', {
       title: 'Tasks - Community Intelligence',
@@ -161,7 +173,13 @@ const adminAuth = require('./src/middleware/adminAuth');
 app.get('/admin', auth, adminAuth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.redirect('/admin/users');
   } catch (error) {
@@ -173,7 +191,13 @@ app.get('/admin', auth, adminAuth, async (req, res) => {
 app.get('/admin/users', auth, adminAuth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('admin/users', {
       title: 'User Management - Admin',
@@ -190,7 +214,13 @@ app.get('/admin/users', auth, adminAuth, async (req, res) => {
 app.get('/admin/ask-agent', auth, adminAuth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('admin/askAgent', {
       title: 'Ask Agent Configuration - Admin',
@@ -207,7 +237,13 @@ app.get('/admin/ask-agent', auth, adminAuth, async (req, res) => {
 app.get('/admin/bg-agent', auth, adminAuth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('admin/bgAgent', {
       title: 'Background Agent Configuration - Admin',
@@ -224,7 +260,13 @@ app.get('/admin/bg-agent', auth, adminAuth, async (req, res) => {
 app.get('/admin/tasks-agent', auth, adminAuth, async (req, res) => {
   try {
     const Task = require('./src/models/Task');
-    const taskCount = await Task.countDocuments({ isCompleted: false });
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.render('admin/tasksAgent', {
       title: 'Tasks Agent Configuration - Admin',

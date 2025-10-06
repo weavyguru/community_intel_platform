@@ -114,7 +114,13 @@ exports.getTasks = async (req, res) => {
 exports.getTaskCount = async (req, res) => {
   try {
     // Count only tasks that are not completed AND not skipped
-    const count = await Task.countDocuments({ isCompleted: false, isSkipped: { $ne: true } });
+    const count = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     res.json({
       success: true,
@@ -132,7 +138,13 @@ exports.getTaskCount = async (req, res) => {
 exports.getTaskStats = async (req, res) => {
   try {
     // Open count: not completed AND not skipped
-    const openCount = await Task.countDocuments({ isCompleted: false, isSkipped: { $ne: true } });
+    const openCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
 
     // Get completed today count
     const startOfDay = new Date();
@@ -145,7 +157,10 @@ exports.getTaskStats = async (req, res) => {
     // Get high priority count (only open tasks)
     const highPriorityCount = await Task.countDocuments({
       isCompleted: false,
-      isSkipped: { $ne: true },
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ],
       priority: 'high'
     });
 
@@ -153,7 +168,10 @@ exports.getTaskStats = async (req, res) => {
     const delegatedNotDoneCount = await Task.countDocuments({
       delegatedTo: { $exists: true, $ne: null },
       isCompleted: false,
-      isSkipped: { $ne: true }
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
     });
 
     res.json({
