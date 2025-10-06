@@ -6,7 +6,6 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
@@ -57,15 +56,6 @@ app.use(helmet({
     }
   }
 }));
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
-});
-
-app.use('/api/', limiter);
 
 // CORS
 app.use(cors({

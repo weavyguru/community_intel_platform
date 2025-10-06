@@ -232,11 +232,43 @@ class IntelligenceJob {
       const question = `Analyze the community content from the last ${this.lastSuccessfulRun ? 'time period' : '4 hours'}. What are the key themes, issues, and opportunities?`;
       const instructions = askConfig.instructions || 'You are a helpful AI assistant analyzing community feedback.';
 
-      const analysisStartTime = Date.now();
-      const response = await claudeService.askWithContext(question, newContent, instructions);
-      const analysisTime = Date.now() - analysisStartTime;
+      let response;
+      let analysisTime = 0;
 
-      emitStatus('Ask Agent complete', `Analysis completed in ${(analysisTime / 1000).toFixed(1)}s`);
+      try {
+        const analysisStartTime = Date.now();
+        response = await claudeService.askWithContext(question, newContent, instructions);
+        analysisTime = Date.now() - analysisStartTime;
+        emitStatus('Ask Agent complete', `Analysis completed in ${(analysisTime / 1000).toFixed(1)}s`);
+      } catch (error) {
+        // Handle token limit errors gracefully - continue with task generation
+        if (error.message && error.message.includes('too long')) {
+          console.warn('⚠ Ask Agent skipped: Content exceeds token limit');
+          console.warn(`Content size: ${newContent.length} items`);
+          emitStatus('Ask Agent skipped', `Content too large (${newContent.length} items), proceeding with task generation...`);
+
+          // Create a simple summary instead
+          response = {
+            answer: `Analysis skipped due to content size (${newContent.length} items). Task generation will continue with individual source analysis.`,
+            usage: {
+              input_tokens: 0,
+              output_tokens: 0
+            }
+          };
+        } else {
+          // For other errors, log but still try to continue
+          console.error('Ask Agent error:', error.message);
+          emitStatus('Ask Agent error', `Analysis failed: ${error.message}. Continuing with task generation...`);
+
+          response = {
+            answer: `Analysis failed: ${error.message}. Task generation will continue.`,
+            usage: {
+              input_tokens: 0,
+              output_tokens: 0
+            }
+          };
+        }
+      }
 
       // STEP 6: Generate title and save conversation
       emitStatus('Saving conversation', 'Generating title and saving to database...');
@@ -377,6 +409,9 @@ class IntelligenceJob {
     if (emitStatus) emitStatus('Analyzing sources', `Processing ${uniqueSources.length} unique sources...`);
 
     // Analyze each source (same logic as taskGenerationController)
+    let processedCount = 0;
+    let skippedCount = 0;
+
     for (const source of uniqueSources) {
       try {
         const prompt = this.buildTaskGenerationPrompt(
@@ -419,12 +454,20 @@ class IntelligenceJob {
               if (emitStatus) emitStatus('Task created', `${task.title} (score: ${taskAnalysis.score})`);
             }
           }
+
+          processedCount++;
         }
 
       } catch (error) {
-        console.error(`Error analyzing source ${source.id}:`, error.message);
-        // Continue with next source
+        skippedCount++;
+        console.error(`⚠ Skipping source ${source.id} (${source.platform}):`, error.message);
+        // Continue with next source instead of failing the entire job
       }
+    }
+
+    console.log(`Task generation complete: ${processedCount} processed, ${skippedCount} skipped, ${createdTasks.length} tasks created`);
+    if (emitStatus && skippedCount > 0) {
+      emitStatus('Task generation complete', `Processed ${processedCount}/${uniqueSources.length} sources (${skippedCount} skipped due to errors)`);
     }
 
     // Save analysis report to conversation
