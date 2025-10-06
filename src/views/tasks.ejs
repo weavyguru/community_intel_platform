@@ -13,7 +13,7 @@
 
   <!-- Filters -->
   <div class="bg-white rounded-lg shadow p-4">
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <sl-select id="statusFilter" placeholder="All Status" value="false">
         <sl-option value="">All Status</sl-option>
         <sl-option value="false">Open</sl-option>
@@ -34,14 +34,12 @@
         <sl-option value="not-delegated">Not Delegated</sl-option>
       </sl-select>
 
-      <sl-select id="delegatedUserFilter" placeholder="All Users" value="" style="display: none;">
-        <sl-option value="">All Users</sl-option>
-      </sl-select>
-
-      <sl-button id="refreshTasksBtn" variant="primary" class="w-full">
-        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
-        Refresh
-      </sl-button>
+      <div id="userFilterOrRefresh">
+        <sl-button id="refreshTasksBtn" variant="primary" class="w-full">
+          <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+          Refresh
+        </sl-button>
+      </div>
     </div>
   </div>
 
@@ -145,14 +143,26 @@
       if (data.success) {
         allUsers = data.users;
 
-        // Populate delegated user filter
-        const delegatedUserFilter = document.getElementById('delegatedUserFilter');
+        // Create delegated user filter dynamically
+        const delegatedUserFilter = document.createElement('sl-select');
+        delegatedUserFilter.id = 'delegatedUserFilter';
+        delegatedUserFilter.placeholder = 'All Users';
+        delegatedUserFilter.value = '';
+
+        const allOption = document.createElement('sl-option');
+        allOption.value = '';
+        allOption.textContent = 'All Users';
+        delegatedUserFilter.appendChild(allOption);
+
         allUsers.forEach(user => {
           const option = document.createElement('sl-option');
           option.value = user._id;
           option.textContent = user.name;
           delegatedUserFilter.appendChild(option);
         });
+
+        // Store it but don't add to DOM yet
+        window.delegatedUserFilterElement = delegatedUserFilter;
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -163,7 +173,8 @@
     const status = document.getElementById('statusFilter').value;
     const priority = document.getElementById('priorityFilter').value;
     const delegation = document.getElementById('delegationFilter').value;
-    const delegatedUserId = document.getElementById('delegatedUserFilter').value;
+    const delegatedUserFilter = document.getElementById('delegatedUserFilter');
+    const delegatedUserId = delegatedUserFilter ? delegatedUserFilter.value : '';
 
     const params = new URLSearchParams();
     if (status) params.append('completed', status);
@@ -231,13 +242,17 @@
       if (delegationFilter && delegation === 'delegated') {
         delegationFilter.value = 'delegated';
 
-        // Show delegated user filter
-        const delegatedUserFilter = document.getElementById('delegatedUserFilter');
-        delegatedUserFilter.style.display = 'block';
+        // Show delegated user filter by swapping with refresh button
+        if (window.delegatedUserFilterElement) {
+          const container = document.getElementById('userFilterOrRefresh');
+          container.innerHTML = '';
+          container.appendChild(window.delegatedUserFilterElement);
+          window.delegatedUserFilterElement.addEventListener('sl-change', loadTasks);
 
-        // Set delegated user if specified
-        if (delegatedUser) {
-          delegatedUserFilter.value = delegatedUser;
+          // Set delegated user if specified
+          if (delegatedUser) {
+            window.delegatedUserFilterElement.value = delegatedUser;
+          }
         }
       }
     }
@@ -896,21 +911,29 @@
   document.getElementById('priorityFilter').addEventListener('sl-change', loadTasks);
 
   document.getElementById('delegationFilter').addEventListener('sl-change', (e) => {
-    const delegatedUserFilter = document.getElementById('delegatedUserFilter');
+    const container = document.getElementById('userFilterOrRefresh');
+    const refreshBtn = document.getElementById('refreshTasksBtn');
 
-    if (e.target.value === 'delegated') {
-      // Show delegated user filter
-      delegatedUserFilter.style.display = 'block';
+    if (e.target.value === 'delegated' && window.delegatedUserFilterElement) {
+      // Replace refresh button with user filter
+      container.innerHTML = '';
+      container.appendChild(window.delegatedUserFilterElement);
+
+      // Add event listener to the filter
+      window.delegatedUserFilterElement.addEventListener('sl-change', loadTasks);
     } else {
-      // Hide and reset delegated user filter
-      delegatedUserFilter.style.display = 'none';
-      delegatedUserFilter.value = '';
+      // Restore refresh button
+      container.innerHTML = '';
+      container.appendChild(refreshBtn);
+
+      // Reset user filter value if it exists
+      if (window.delegatedUserFilterElement) {
+        window.delegatedUserFilterElement.value = '';
+      }
     }
 
     loadTasks();
   });
-
-  document.getElementById('delegatedUserFilter').addEventListener('sl-change', loadTasks);
 
   // Create task button event listener
   document.getElementById('createTaskBtn').addEventListener('click', () => {
