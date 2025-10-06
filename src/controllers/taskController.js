@@ -476,6 +476,55 @@ exports.delegateTask = async (req, res) => {
   }
 };
 
+// @desc    Update task suggested response
+// @route   PATCH /api/tasks/:id/response
+// @access  Private
+exports.updateSuggestedResponse = async (req, res) => {
+  try {
+    const { suggestedResponse } = req.body;
+
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+
+    // Save current version to history before updating
+    if (task.suggestedResponse) {
+      if (!task.responseVersions) {
+        task.responseVersions = [];
+      }
+
+      task.responseVersions.push({
+        content: task.suggestedResponse,
+        savedAt: new Date(),
+        versionNumber: task.currentVersion || 1
+      });
+    }
+
+    // Update to new version
+    task.suggestedResponse = suggestedResponse;
+    task.currentVersion = (task.currentVersion || 1) + 1;
+
+    await task.save();
+
+    // Emit socket event for real-time update
+    if (global.io) {
+      global.io.emit('task:updated', {
+        taskId: task._id.toString()
+      });
+    }
+
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    console.error('Update suggested response error:', error);
+    res.status(500).json({ error: 'Error updating response: ' + error.message });
+  }
+};
+
 // @desc    Get all users
 // @route   GET /api/users
 // @access  Private

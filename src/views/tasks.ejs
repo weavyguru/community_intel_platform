@@ -312,10 +312,30 @@
                 ${task.suggestedResponse ? `
                   <div class="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                     <div class="flex items-center justify-between mb-2">
-                      <span class="text-xs font-semibold text-yellow-800">Suggested Response</span>
-                      <sl-icon-button name="clipboard" label="Copy response" data-copy-response="${task._id}"></sl-icon-button>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold text-yellow-800">Suggested Response</span>
+                        <sl-badge variant="neutral" size="small" pill id="version-badge-${task._id}">v${task.currentVersion || 1}</sl-badge>
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <sl-icon-button name="pencil" label="Edit response" data-edit-response="${task._id}"></sl-icon-button>
+                        <sl-icon-button name="clipboard" label="Copy response" data-copy-response="${task._id}"></sl-icon-button>
+                      </div>
                     </div>
-                    <p id="response-${task._id}" class="text-sm text-gray-700 whitespace-pre-wrap">${task.suggestedResponse}</p>
+                    <div id="response-view-${task._id}">
+                      <p id="response-${task._id}" class="text-sm text-gray-700 whitespace-pre-wrap">${task.suggestedResponse}</p>
+                    </div>
+                    <div id="response-edit-${task._id}" style="display: none;">
+                      <sl-textarea id="response-textarea-${task._id}" rows="4" resize="auto"></sl-textarea>
+                      <div class="flex gap-2 mt-2">
+                        <sl-button size="small" variant="primary" data-save-response="${task._id}">
+                          <sl-icon slot="prefix" name="check"></sl-icon>
+                          Save
+                        </sl-button>
+                        <sl-button size="small" variant="default" data-cancel-edit="${task._id}">
+                          Cancel
+                        </sl-button>
+                      </div>
+                    </div>
                   </div>
                 ` : ''}
 
@@ -383,6 +403,30 @@
         button.addEventListener('click', (e) => {
           const taskId = e.currentTarget.getAttribute('data-copy-response');
           copyResponse(taskId);
+        });
+      });
+
+      // Edit response buttons
+      document.querySelectorAll('[data-edit-response]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-edit-response');
+          toggleEditResponseMode(taskId, true);
+        });
+      });
+
+      // Save response buttons
+      document.querySelectorAll('[data-save-response]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-save-response');
+          saveEditedResponse(taskId);
+        });
+      });
+
+      // Cancel edit buttons
+      document.querySelectorAll('[data-cancel-edit]').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const taskId = e.currentTarget.getAttribute('data-cancel-edit');
+          toggleEditResponseMode(taskId, false);
         });
       });
 
@@ -564,6 +608,74 @@
       console.error('Error copying text:', err);
       showToast('Error copying to clipboard', 'danger', 'exclamation-triangle');
     });
+  }
+
+  function toggleEditResponseMode(taskId, isEdit) {
+    const viewDiv = document.getElementById(`response-view-${taskId}`);
+    const editDiv = document.getElementById(`response-edit-${taskId}`);
+
+    if (isEdit) {
+      // Populate textarea with current response text
+      const currentText = document.getElementById(`response-${taskId}`).textContent;
+      const textarea = document.getElementById(`response-textarea-${taskId}`);
+      textarea.value = currentText;
+
+      viewDiv.style.display = 'none';
+      editDiv.style.display = 'block';
+
+      // Focus the textarea
+      setTimeout(() => textarea.focus(), 100);
+    } else {
+      viewDiv.style.display = 'block';
+      editDiv.style.display = 'none';
+    }
+  }
+
+  async function saveEditedResponse(taskId) {
+    try {
+      const textarea = document.getElementById(`response-textarea-${taskId}`);
+      const newResponse = textarea.value;
+
+      if (!newResponse.trim()) {
+        showToast('Response cannot be empty', 'warning', 'exclamation-triangle');
+        return;
+      }
+
+      // Optimistic update: Update DOM immediately
+      const responseText = document.getElementById(`response-${taskId}`);
+      const versionBadge = document.getElementById(`version-badge-${taskId}`);
+
+      // Store old values for rollback if needed
+      const oldResponse = responseText.textContent;
+      const oldVersion = versionBadge.textContent;
+      const currentVersion = parseInt(oldVersion.replace('v', ''));
+      const newVersion = currentVersion + 1;
+
+      // Update UI immediately
+      responseText.textContent = newResponse;
+      versionBadge.textContent = `v${newVersion}`;
+      toggleEditResponseMode(taskId, false);
+      showToast('Response updated successfully!', 'success', 'check-circle');
+
+      // Save to backend in background
+      const response = await fetch(`/api/tasks/${taskId}/response`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestedResponse: newResponse })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        // Rollback on error
+        responseText.textContent = oldResponse;
+        versionBadge.textContent = oldVersion;
+        showToast('Error: ' + (data.error || 'Failed to save response'), 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Save response error:', error);
+      showToast('Error saving response', 'danger', 'exclamation-triangle');
+    }
   }
 
   let taskToDelete = null;

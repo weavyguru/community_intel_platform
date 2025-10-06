@@ -284,7 +284,25 @@ exports.updateSuggestedTask = async (req, res) => {
       return res.status(404).json({ error: 'Suggested task not found' });
     }
 
-    conversation.suggestedTasks[parseInt(taskIndex)].suggestedResponse = suggestedResponse;
+    const task = conversation.suggestedTasks[parseInt(taskIndex)];
+
+    // Save current version to history before updating
+    if (task.suggestedResponse) {
+      if (!task.responseVersions) {
+        task.responseVersions = [];
+      }
+
+      task.responseVersions.push({
+        content: task.suggestedResponse,
+        savedAt: new Date(),
+        versionNumber: task.currentVersion || 1
+      });
+    }
+
+    // Update to new version
+    task.suggestedResponse = suggestedResponse;
+    task.currentVersion = (task.currentVersion || 1) + 1;
+
     await conversation.save();
 
     res.json({

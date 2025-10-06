@@ -947,6 +947,9 @@ Trends: ${includeTrends}`;
       taskSuggestionsList.addEventListener('click', (e) => {
         const createBtn = e.target.closest('.create-task-btn');
         const skipBtn = e.target.closest('.skip-task-btn');
+        const editBtn = e.target.closest('.edit-response-btn');
+        const saveBtn = e.target.closest('.save-response-btn');
+        const cancelBtn = e.target.closest('.cancel-edit-btn');
 
         if (createBtn) {
           const taskIndex = parseInt(createBtn.getAttribute('data-task-index'));
@@ -954,6 +957,15 @@ Trends: ${includeTrends}`;
         } else if (skipBtn) {
           const taskIndex = parseInt(skipBtn.getAttribute('data-task-index'));
           skipTask(taskIndex);
+        } else if (editBtn) {
+          const taskIndex = parseInt(editBtn.getAttribute('data-task-index'));
+          toggleEditMode(taskIndex, true);
+        } else if (saveBtn) {
+          const taskIndex = parseInt(saveBtn.getAttribute('data-task-index'));
+          saveEditedResponse(taskIndex);
+        } else if (cancelBtn) {
+          const taskIndex = parseInt(cancelBtn.getAttribute('data-task-index'));
+          toggleEditMode(taskIndex, false);
         }
       });
     }
@@ -1016,8 +1028,28 @@ Trends: ${includeTrends}`;
         <p class="text-xs text-gray-700 mb-2">${task.reasoning}</p>
         ${task.suggestedResponse ? `
           <div class="mt-2 p-2 bg-gray-50 rounded border border-gray-200">
-            <p class="text-xs font-medium text-gray-700 mb-1">Suggested Response:</p>
-            <p class="text-xs text-gray-600">${task.suggestedResponse}</p>
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2">
+                <p class="text-xs font-medium text-gray-700">Suggested Response:</p>
+                <sl-badge variant="neutral" size="small" pill>v${task.currentVersion || 1}</sl-badge>
+              </div>
+              <sl-icon-button name="pencil" label="Edit response" class="edit-response-btn" data-task-index="${index}"></sl-icon-button>
+            </div>
+            <div class="response-view-${index}">
+              <p class="text-xs text-gray-600">${task.suggestedResponse}</p>
+            </div>
+            <div class="response-edit-${index}" style="display: none;">
+              <sl-textarea class="response-textarea" rows="4" resize="auto">${task.suggestedResponse}</sl-textarea>
+              <div class="flex gap-2 mt-2">
+                <sl-button size="small" variant="primary" class="save-response-btn" data-task-index="${index}">
+                  <sl-icon slot="prefix" name="check"></sl-icon>
+                  Save
+                </sl-button>
+                <sl-button size="small" variant="default" class="cancel-edit-btn" data-task-index="${index}">
+                  Cancel
+                </sl-button>
+              </div>
+            </div>
           </div>
         ` : ''}
         ${task.sourceDeeplink ? `
@@ -1163,6 +1195,78 @@ Trends: ${includeTrends}`;
       }
     } catch (error) {
       console.error('Skip task error:', error);
+    }
+  }
+
+  function toggleEditMode(taskIndex, isEdit) {
+    const viewDiv = document.querySelector(`.response-view-${taskIndex}`);
+    const editDiv = document.querySelector(`.response-edit-${taskIndex}`);
+
+    if (isEdit) {
+      // Populate textarea with current response text
+      const currentText = viewDiv.querySelector('p').textContent;
+      const textarea = editDiv.querySelector('.response-textarea');
+      textarea.value = currentText;
+
+      viewDiv.style.display = 'none';
+      editDiv.style.display = 'block';
+
+      // Focus the textarea
+      setTimeout(() => textarea.focus(), 100);
+    } else {
+      viewDiv.style.display = 'block';
+      editDiv.style.display = 'none';
+    }
+  }
+
+  async function saveEditedResponse(taskIndex) {
+    try {
+      const editDiv = document.querySelector(`.response-edit-${taskIndex}`);
+      const textarea = editDiv.querySelector('.response-textarea');
+      const newResponse = textarea.value;
+
+      if (!newResponse.trim()) {
+        showToast('Response cannot be empty', 'warning', 'exclamation-triangle');
+        return;
+      }
+
+      // Optimistic update: Update DOM immediately
+      const viewDiv = document.querySelector(`.response-view-${taskIndex}`);
+      const responseText = viewDiv.querySelector('p');
+      const versionBadge = document.querySelector(`.response-edit-${taskIndex}`).parentElement.querySelector('sl-badge');
+
+      // Store old values for rollback if needed
+      const oldResponse = responseText.textContent;
+      const oldVersion = versionBadge.textContent;
+      const currentVersion = parseInt(oldVersion.replace('v', ''));
+      const newVersion = currentVersion + 1;
+
+      // Update UI immediately
+      responseText.textContent = newResponse;
+      versionBadge.textContent = `v${newVersion}`;
+      toggleEditMode(taskIndex, false);
+      showToast('Response updated successfully!', 'success', 'check-circle');
+
+      // Save to backend in background
+      const response = await fetch(`/api/conversations/${window.currentConversationId}/tasks/${taskIndex}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ suggestedResponse: newResponse })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        // Rollback on error
+        responseText.textContent = oldResponse;
+        versionBadge.textContent = oldVersion;
+        showToast('Error: ' + (data.error || 'Failed to save response'), 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Save response error:', error);
+      showToast('Error saving response', 'danger', 'exclamation-triangle');
+      // Could add rollback here too if we stored the old values
     }
   }
 

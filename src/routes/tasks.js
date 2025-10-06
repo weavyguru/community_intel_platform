@@ -15,6 +15,7 @@ router.put('/:id/reopen', auth, taskController.reopenTask);
 router.put('/:id/skip', auth, taskController.skipTask);
 router.put('/:id/unskip', auth, taskController.unskipTask);
 router.put('/:id/delegate', auth, taskController.delegateTask);
+router.patch('/:id/response', auth, taskController.updateSuggestedResponse);
 router.delete('/:id', auth, adminAuth, taskController.deleteTask);
 router.put('/:id/priority', auth, adminAuth, taskController.updatePriority);
 

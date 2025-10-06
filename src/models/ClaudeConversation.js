@@ -46,6 +46,12 @@ const claudeConversationSchema = new mongoose.Schema({
     score: Number,
     reasoning: String,
     suggestedResponse: String,
+    responseVersions: [{
+      content: String,
+      savedAt: Date,
+      versionNumber: Number
+    }],
+    currentVersion: { type: Number, default: 1 },
     relevanceScore: Number,
     status: { type: String, enum: ['pending', 'accepted', 'rejected', 'created'], default: 'pending' },
     createdTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task' },

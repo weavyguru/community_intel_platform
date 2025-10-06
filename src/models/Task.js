@@ -17,6 +17,12 @@ const taskSchema = new mongoose.Schema({
   delegatedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   delegatedAt: Date,
   suggestedResponse: String,
+  responseVersions: [{
+    content: String,
+    savedAt: Date,
+    versionNumber: Number
+  }],
+  currentVersion: { type: Number, default: 1 },
   reasoning: String, // AI reasoning for why this task was created
   metadata: {
     author: String,
