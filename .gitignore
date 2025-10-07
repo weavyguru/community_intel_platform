@@ -13,3 +13,16 @@ coverage/
 *.swp
 *.swo
 *~
+
+# Utility and report scripts
+fetch_agent_instructions.js
+report_skipped_and_edited_tasks.js
+update_create_tasks_agent.js
+
+# Documentation and reports
+instruction_updates_summary.md
+updated_create_tasks_instructions.md
+skipped_and_edited_tasks_report.txt
+
+# Windows command output
+nul
