@@ -450,6 +450,67 @@ exports.unskipTask = async (req, res) => {
   }
 };
 
+// @desc    Bulk skip multiple tasks
+// @route   POST /api/tasks/bulk/skip
+// @access  Private
+exports.bulkSkipTasks = async (req, res) => {
+  try {
+    const { taskIds, reason } = req.body;
+
+    if (!taskIds || !Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({ error: 'Task IDs array is required' });
+    }
+
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    // Process each task
+    for (const taskId of taskIds) {
+      try {
+        const task = await Task.findById(taskId);
+
+        if (!task) {
+          results.failed.push({ taskId, error: 'Task not found' });
+          continue;
+        }
+
+        task.isSkipped = true;
+        task.skippedBy = req.user._id;
+        task.skippedAt = Date.now();
+        if (reason) {
+          task.skippedReason = reason;
+        }
+        await task.save();
+
+        results.success.push(taskId);
+
+        // Emit socket event for real-time update
+        if (global.io) {
+          global.io.emit('task:updated', {
+            taskId: task._id.toString(),
+            isSkipped: true
+          });
+        }
+      } catch (error) {
+        console.error(`Error skipping task ${taskId}:`, error);
+        results.failed.push({ taskId, error: error.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      skippedCount: results.success.length,
+      failedCount: results.failed.length,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk skip error:', error);
+    res.status(500).json({ error: 'Error skipping tasks' });
+  }
+};
+
 // @desc    Delegate task to user
 // @route   PUT /api/tasks/:id/delegate
 // @access  Private

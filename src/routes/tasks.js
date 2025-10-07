@@ -8,6 +8,7 @@ router.post('/', auth, taskController.createTask);
 router.get('/', auth, taskController.getTasks);
 router.get('/count', auth, taskController.getTaskCount);
 router.get('/stats', auth, taskController.getTaskStats);
+router.post('/bulk/skip', auth, taskController.bulkSkipTasks);
 router.get('/:id', auth, taskController.getTask);
 router.put('/:id', auth, taskController.updateTask);
 router.put('/:id/complete', auth, taskController.completeTask);

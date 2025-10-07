@@ -23,7 +23,10 @@
       "Bash(git pull:*)",
       "Bash(git stash push:*)",
       "Bash(git stash:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []
