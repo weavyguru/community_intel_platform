@@ -12,7 +12,8 @@ class IntelligenceJob {
   constructor() {
     this.isRunning = false;
     this.lastSuccessfulRun = null;
-    this.intervalHours = 4; // Default: 4 hours
+    this.intervalHours = 4; // Default: Job runs every 4 hours
+    this.lookbackHours = 48; // Default: Look back 48 hours in content timestamps
     this.stats = {
       totalRuns: 0,
       successfulRuns: 0,
@@ -82,7 +83,7 @@ class IntelligenceJob {
     console.log(`Intelligence job interval updated to ${hours} hours`);
   }
 
-  async execute(isManual = false) {
+  async execute(isManual = false, customLookbackHours = null) {
     if (this.isRunning) {
       console.log('Intelligence job already running, skipping...');
       return;
@@ -94,10 +95,16 @@ class IntelligenceJob {
     const jobStartTime = Date.now();
     const jobTimestamp = new Date();
 
+    // Use custom lookback hours if provided, otherwise use default
+    const lookbackHours = customLookbackHours !== null ? customLookbackHours : this.lookbackHours;
+
     console.log('='.repeat(60));
     console.log('Intelligence Job Execution Started');
     console.log(`Time: ${jobTimestamp.toISOString()}`);
     console.log(`Mode: ${isManual ? 'Manual' : 'Scheduled'}`);
+    if (customLookbackHours !== null) {
+      console.log(`Custom Lookback: ${lookbackHours} hours`);
+    }
     console.log('='.repeat(60));
 
     // Helper to emit status updates
@@ -117,25 +124,23 @@ class IntelligenceJob {
 
     try {
       // STEP 1: Get time range
-      // Manual runs: Always use interval lookback (for testing)
-      // Scheduled runs: Use last successful run if available, otherwise interval lookback
+      // Always look back {lookbackHours} hours based on content timestamp_unix
+      // This ensures we catch recently imported historical content
       const endDate = new Date();
-      const lookbackMs = this.intervalHours * 60 * 60 * 1000;
-      const startDate = (isManual || !this.lastSuccessfulRun)
-        ? new Date(endDate.getTime() - lookbackMs)
-        : new Date(this.lastSuccessfulRun.getTime());
+      const lookbackMs = lookbackHours * 60 * 60 * 1000;
+      const startDate = new Date(endDate.getTime() - lookbackMs);
 
-      const timeRangeMsg = `Time range: ${startDate.toISOString()} to ${endDate.toISOString()}`;
-      const lookbackMsg = isManual
-        ? `Lookback: ${this.intervalHours} hours (manual run)`
-        : `Lookback: ${this.intervalHours} hours (since ${this.lastSuccessfulRun ? 'last run' : 'configured interval'})`;
+      const timeRangeMsg = `Time range (content timestamps): ${startDate.toISOString()} to ${endDate.toISOString()}`;
+      const lookbackMsg = `Lookback: ${lookbackHours} hours (catches historical content imported recently)`;
+      const scheduleMsg = `Schedule: Job runs every ${this.intervalHours} hours`;
       console.log(timeRangeMsg);
       console.log(lookbackMsg);
+      console.log(scheduleMsg);
       emitStatus('Starting job', `${timeRangeMsg} - ${lookbackMsg}`);
 
-      // STEP 2: Get all content from Chroma since last run (no limit - get everything)
-      emitStatus('Fetching from Chroma', 'Retrieving all content from time range...');
-      const allContent = await chromaService.searchByTimeRange(startDate, endDate); // null limit = get ALL
+      // STEP 2: Get all content from Chroma since last run (posts only, no comments)
+      emitStatus('Fetching from Chroma', 'Retrieving posts from time range (filtering comments)...');
+      const allContent = await chromaService.searchByTimeRange(startDate, endDate, null, true); // null limit = get ALL, true = posts only
 
       if (allContent.length === 0) {
         emitStatus('No content found', 'No new content to analyze in time range');
@@ -219,44 +224,30 @@ class IntelligenceJob {
         return result;
       }
 
-      // STEP 4: Load agent configurations
-      const askConfig = await AgentConfig.findOne({ type: 'ask' });
+      // STEP 4: Load task agent configuration
       const taskConfig = await AgentConfig.findOne({ type: 'create-tasks' });
 
-      if (!askConfig || !taskConfig) {
-        throw new Error('Agent configurations not found (ask or create-tasks)');
+      if (!taskConfig) {
+        throw new Error('Agent configuration not found (create-tasks)');
       }
 
-      // STEP 5: Run Ask Agent analysis with auto-split if needed
-      emitStatus('Running Ask Agent', 'Analyzing content with Claude AI...');
-      const question = `Analyze the community content from the last ${this.lastSuccessfulRun ? 'time period' : '4 hours'}. What are the key themes, issues, and opportunities?`;
-      const instructions = askConfig.instructions || 'You are a helpful AI assistant analyzing community feedback.';
+      // STEP 5: Create conversation (without expensive Ask Agent report)
+      emitStatus('Creating conversation', 'Preparing sources for task generation...');
 
-      let response;
-      let analysisTime = 0;
+      const question = `Background job: Analyze ${newContent.length} posts from the last ${lookbackHours} hours`;
+      const title = `Background Job - ${new Date().toISOString().split('T')[0]}`; // Simple date-based title
 
-      try {
-        const analysisStartTime = Date.now();
-        response = await this.runAskAgentWithAutoSplit(question, newContent, instructions, emitStatus);
-        analysisTime = Date.now() - analysisStartTime;
-        emitStatus('Ask Agent complete', `Analysis completed in ${(analysisTime / 1000).toFixed(1)}s`);
-      } catch (error) {
-        // For errors that couldn't be resolved by splitting, continue with task generation
-        console.error('Ask Agent error:', error.message);
-        emitStatus('Ask Agent error', `Analysis failed: ${error.message}. Continuing with task generation...`);
+      // Skip expensive Ask Agent analysis - go straight to task generation
+      const response = {
+        answer: `Automated task generation from ${newContent.length} posts. Individual source analysis performed by task generation agent.`,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0
+        }
+      };
 
-        response = {
-          answer: `Analysis failed: ${error.message}. Task generation will continue with individual source analysis.`,
-          usage: {
-            input_tokens: 0,
-            output_tokens: 0
-          }
-        };
-      }
-
-      // STEP 6: Generate title and save conversation
-      emitStatus('Saving conversation', 'Generating title and saving to database...');
-      const title = await claudeService.generateTitle(question);
+      console.log('⚡ Skipping Ask Agent report generation (cost optimization)');
+      console.log(`Proceeding directly to task generation for ${newContent.length} sources...`);
 
       const sources = newContent.map(result => ({
         id: result.id,
@@ -286,8 +277,8 @@ class IntelligenceJob {
 
       emitStatus('Conversation saved', `Saved as: ${conversation._id}`);
 
-      // STEP 7: Run Task Generation Agent on all sources
-      emitStatus('Generating tasks', `Analyzing ${newContent.length} sources with Tasks Agent...`);
+      // STEP 6: Run Task Generation Agent on all sources (Haiku → Sonnet filtering)
+      emitStatus('Generating tasks', `Analyzing ${newContent.length} sources with two-stage filtering...`);
       const createdTasks = await this.generateAndCreateTasks(
         conversation,
         taskConfig,
@@ -389,25 +380,79 @@ class IntelligenceJob {
       return true;
     });
 
-    console.log(`Analyzing ${uniqueSources.length} unique sources...`);
-    if (emitStatus) emitStatus('Analyzing sources', `Processing ${uniqueSources.length} unique sources...`);
+    console.log(`Analyzing ${uniqueSources.length} unique sources with two-stage filtering...`);
+    if (emitStatus) emitStatus('Analyzing sources', `Processing ${uniqueSources.length} unique sources with Haiku → Sonnet filtering...`);
 
-    // Analyze each source (same logic as taskGenerationController)
+    // Two-stage filtering: Haiku → Sonnet (same as taskGenerationController)
     let processedCount = 0;
     let skippedCount = 0;
+    let filteredByHaiku = 0;
+    let analyzedBySonnet = 0;
+
+    // Track cache metrics
+    let totalCacheWrites = 0;
+    let totalCacheReads = 0;
 
     for (const source of uniqueSources) {
       try {
-        const prompt = this.buildTaskGenerationPrompt(
+        processedCount++;
+
+        // STAGE 1: Quick Haiku filter
+        const filterResult = await claudeService.quickFilterWithHaiku(source);
+
+        if (!filterResult.shouldAnalyze) {
+          filteredByHaiku++;
+          console.log(`[${processedCount}/${uniqueSources.length}] 🔍 Haiku filtered: ${source.platform} - ${source.author} - ${filterResult.reason}`);
+
+          // Add to report as filtered
+          analysisReport.push({
+            sourceId: source.id,
+            platform: source.platform,
+            author: source.author,
+            contentSnippet: source.content ? source.content.substring(0, 200) : '',
+            sourceDeeplink: source.deeplink,
+            score: 0,
+            shouldEngage: false,
+            reasoning: `Filtered by Haiku: ${filterResult.reason}`,
+            filteredStage: 'haiku',
+            isComment: source.metadata?.is_comment || false,
+            relevanceScore: source.relevanceScore,
+            analyzedAt: new Date()
+          });
+
+          continue; // Skip Sonnet analysis
+        }
+
+        // STAGE 2: Full Sonnet analysis (for posts that passed Haiku)
+        analyzedBySonnet++;
+        console.log(`[${processedCount}/${uniqueSources.length}] 🤖 Sonnet analyzing: ${source.platform} - ${source.author}`);
+
+        // Build post content for analysis (cached method separates static from variable content)
+        const postContent = this.buildPostContentForCache(question, answer, source);
+
+        // Use cached method: instructions + valueProps cached, only postContent varies
+        const response = await claudeService.analyzeForTaskWithCache(
           taskConfig.instructions,
           taskConfig.valuePropositions,
-          question,
-          answer,
-          source
+          postContent
         );
+        const taskAnalysis = this.parseTaskAnalysisResponse(response.text);
 
-        const response = await claudeService.analyzeForTask(prompt);
-        const taskAnalysis = this.parseTaskAnalysisResponse(response);
+        // Track cache metrics
+        totalCacheWrites += response.usage?.cache_creation_input_tokens || 0;
+        totalCacheReads += response.usage?.cache_read_input_tokens || 0;
+
+        // Log score result with response type
+        if (taskAnalysis) {
+          const responseTypeLabel = taskAnalysis.responseType
+            ? ` (${taskAnalysis.responseType})`
+            : '';
+          if (taskAnalysis.shouldEngage) {
+            console.log(`[${processedCount}/${uniqueSources.length}] ✅ Score: ${taskAnalysis.score}/12${responseTypeLabel} - Task created`);
+          } else {
+            console.log(`[${processedCount}/${uniqueSources.length}] ❌ Score: ${taskAnalysis.score}/12 - Skipped (below threshold)`);
+          }
+        }
 
         if (taskAnalysis) {
           analysisReport.push({
@@ -418,6 +463,7 @@ class IntelligenceJob {
             sourceDeeplink: source.deeplink,
             score: taskAnalysis.score,
             shouldEngage: taskAnalysis.shouldEngage,
+            responseType: taskAnalysis.responseType || null,
             reasoning: taskAnalysis.reasoning,
             isComment: source.metadata?.is_comment || false,
             relevanceScore: source.relevanceScore,
@@ -438,8 +484,6 @@ class IntelligenceJob {
               if (emitStatus) emitStatus('Task created', `${task.title} (score: ${taskAnalysis.score})`);
             }
           }
-
-          processedCount++;
         }
 
       } catch (error) {
@@ -449,9 +493,30 @@ class IntelligenceJob {
       }
     }
 
-    console.log(`Task generation complete: ${processedCount} processed, ${skippedCount} skipped, ${createdTasks.length} tasks created`);
-    if (emitStatus && skippedCount > 0) {
-      emitStatus('Task generation complete', `Processed ${processedCount}/${uniqueSources.length} sources (${skippedCount} skipped due to errors)`);
+    // Print filter efficiency summary
+    const filterEfficiency = uniqueSources.length > 0
+      ? ((filteredByHaiku / uniqueSources.length) * 100).toFixed(1)
+      : 0;
+
+    // Calculate cache savings
+    const cacheWriteCount = totalCacheWrites > 0 ? 1 : 0; // Usually just 1 write at start
+    const cacheReadCount = Math.floor(totalCacheReads / 7862); // Estimate # of cache hits (7862 tokens per cache)
+    const cacheCostSavings = (totalCacheReads * 15 / 1000000) - (totalCacheReads * 1.5 / 1000000); // 90% savings
+    const cacheSavingsPercent = totalCacheReads > 0 ? 90 : 0;
+
+    console.log('');
+    console.log('=== Two-Stage Filter Results ===');
+    console.log(`Total sources: ${uniqueSources.length}`);
+    console.log(`Filtered by Haiku (Stage 1): ${filteredByHaiku} (${filterEfficiency}%)`);
+    console.log(`Analyzed by Sonnet (Stage 2): ${analyzedBySonnet}`);
+    console.log(`Cache Stats: ${cacheWriteCount} write, ${cacheReadCount} reads | Saved: $${cacheCostSavings.toFixed(2)} (${cacheSavingsPercent}% reduction on cached tokens)`);
+    console.log(`Tasks generated: ${createdTasks.length}`);
+    console.log(`Estimated cost savings: ~${filterEfficiency}% reduction in Sonnet calls + ${cacheSavingsPercent}% on cached tokens`);
+    console.log('================================');
+    console.log('');
+
+    if (emitStatus) {
+      emitStatus('Task generation complete', `Filtered ${filteredByHaiku} (${filterEfficiency}%), analyzed ${analyzedBySonnet}, created ${createdTasks.length} tasks`);
     }
 
     // Save analysis report to conversation
@@ -503,7 +568,8 @@ class IntelligenceJob {
           conversationId: conversationId,
           originalPlatform: source.platform,
           autoGenerated: true,
-          score: taskAnalysis.score
+          score: taskAnalysis.score,
+          responseType: taskAnalysis.responseType || null
         },
         foundByAgent: true
       });
@@ -549,6 +615,36 @@ Return your analysis in the following JSON format:
 {
   "shouldEngage": true/false,
   "score": <number out of 12>,
+  "responseType": "pure-help" | "help-with-sprinkle" | "strong-fit",
+  "reasoning": "<1-2 sentences explaining your decision>",
+  "suggestedResponse": "<the response text if engaging, or empty string if not>"
+}`;
+  }
+
+  buildPostContentForCache(question, answer, source) {
+    // This is the variable part that changes per post (not cached)
+    // Instructions + valuePropositions are cached in the system message
+    return `## SUMMARY REPORT:
+**Question:** ${question}
+
+**Analysis:** ${answer}
+
+## POST TO ANALYZE:
+**Platform:** ${source.platform}
+**Author:** ${source.author}
+**Content:** ${source.content}
+**Link:** ${source.deeplink}
+**Relevance Score:** ${source.relevanceScore}
+
+---
+
+Please analyze this post using the scoring framework provided in the instructions above.
+
+Return your analysis in the following JSON format:
+{
+  "shouldEngage": true/false,
+  "score": <number out of 12>,
+  "responseType": "pure-help" | "help-with-sprinkle" | "strong-fit",
   "reasoning": "<1-2 sentences explaining your decision>",
   "suggestedResponse": "<the response text if engaging, or empty string if not>"
 }`;
@@ -657,7 +753,8 @@ Please combine these into a single coherent analysis. Synthesize the insights, a
       ...this.stats,
       lastSuccessfulRun: this.lastSuccessfulRun,
       isRunning: this.isRunning,
-      intervalHours: this.intervalHours
+      intervalHours: this.intervalHours,
+      lookbackHours: this.lookbackHours
     };
   }
 
@@ -697,9 +794,12 @@ Please combine these into a single coherent analysis. Synthesize the insights, a
     }
   }
 
-  async runManually() {
+  async runManually(customLookbackHours = null) {
     console.log('Manual intelligence job execution requested');
-    return await this.execute(true); // Pass true to indicate manual run
+    if (customLookbackHours !== null) {
+      console.log(`Using custom lookback period: ${customLookbackHours} hours`);
+    }
+    return await this.execute(true, customLookbackHours); // Pass true to indicate manual run, and custom lookback hours
   }
 }
 

@@ -57,6 +57,8 @@ exports.generateTasks = async (req, res) => {
     const suggestedTasks = [];
     const analysisReport = [];
     let processedCount = 0;
+    let filteredByHaiku = 0;
+    let analyzedBySonnet = 0;
 
     // Emit initial status
     if (global.io) {
@@ -70,16 +72,7 @@ exports.generateTasks = async (req, res) => {
     // Analyze each source
     for (const source of sourcesToAnalyze) {
       try {
-        // Build prompt for this specific source
-        const prompt = buildTaskGenerationPrompt(
-          config.instructions,
-          config.valuePropositions,
-          conversation.question,
-          conversation.answer,
-          source
-        );
-
-        // Emit progress
+        // Emit progress - Stage 1: Haiku
         if (global.io) {
           global.io.emit('task-generation:progress', {
             userId: req.user._id.toString(),
@@ -87,15 +80,81 @@ exports.generateTasks = async (req, res) => {
             current: processedCount + 1,
             total: sourcesToAnalyze.length,
             platform: source.platform,
-            author: source.author
+            author: source.author,
+            stage: 'haiku',
+            model: 'Claude 3.5 Haiku'
           });
         }
 
-        // Call Claude to analyze this source
-        const response = await claudeService.analyzeForTask(prompt);
+        // STAGE 1: Quick filter with Haiku
+        const filterResult = await claudeService.quickFilterWithHaiku(source);
+
+        // If Haiku says skip, add to report and continue to next source
+        if (!filterResult.shouldAnalyze) {
+          filteredByHaiku++;
+          analysisReport.push({
+            sourceId: source.id,
+            platform: source.platform,
+            author: source.author,
+            contentSnippet: source.content ? source.content.substring(0, 200) : '',
+            sourceDeeplink: source.deeplink,
+            score: 0,
+            shouldEngage: false,
+            reasoning: `Filtered by Haiku: ${filterResult.reason} (App type: ${filterResult.appType})`,
+            isComment: source.metadata?.is_comment || false,
+            relevanceScore: source.relevanceScore,
+            analyzedAt: new Date(),
+            filteredStage: 'haiku'
+          });
+          processedCount++;
+          continue;
+        }
+
+        // STAGE 2: Full analysis with Sonnet (only for posts that passed Haiku filter)
+        analyzedBySonnet++;
+
+        // Emit progress - Stage 2: Sonnet
+        if (global.io) {
+          global.io.emit('task-generation:progress', {
+            userId: req.user._id.toString(),
+            conversationId: conversationId,
+            current: processedCount + 1,
+            total: sourcesToAnalyze.length,
+            platform: source.platform,
+            author: source.author,
+            stage: 'sonnet',
+            model: 'Claude Sonnet 4.5'
+          });
+        }
+
+        // Build post content for analysis (cached method separates static from variable content)
+        const postContent = buildPostContentForCache(
+          conversation.question,
+          conversation.answer,
+          source
+        );
+
+        // Call Claude Sonnet with prompt caching (instructions + valueProps cached)
+        const response = await claudeService.analyzeForTaskWithCache(
+          config.instructions,
+          config.valuePropositions,
+          postContent
+        );
 
         // Parse the response
-        const taskAnalysis = parseTaskAnalysisResponse(response);
+        const taskAnalysis = parseTaskAnalysisResponse(response.text);
+
+        // Log score result with response type
+        if (taskAnalysis) {
+          const responseTypeLabel = taskAnalysis.responseType
+            ? ` (${taskAnalysis.responseType})`
+            : '';
+          if (taskAnalysis.shouldEngage) {
+            console.log(`[${processedCount + 1}/${sourcesToAnalyze.length}] ✅ Score: ${taskAnalysis.score}/12${responseTypeLabel} - Task suggestion created`);
+          } else {
+            console.log(`[${processedCount + 1}/${sourcesToAnalyze.length}] ❌ Score: ${taskAnalysis.score}/12 - Skipped (below threshold)`);
+          }
+        }
 
         // Add to analysis report (ALL sources, not just engaged ones)
         if (taskAnalysis) {
@@ -107,6 +166,7 @@ exports.generateTasks = async (req, res) => {
             sourceDeeplink: source.deeplink,
             score: taskAnalysis.score,
             shouldEngage: taskAnalysis.shouldEngage,
+            responseType: taskAnalysis.responseType || null,
             reasoning: taskAnalysis.reasoning,
             isComment: source.metadata?.is_comment || false,
             relevanceScore: source.relevanceScore,
@@ -133,6 +193,7 @@ exports.generateTasks = async (req, res) => {
             author: source.author,
             shouldEngage: taskAnalysis.shouldEngage,
             score: taskAnalysis.score,
+            responseType: taskAnalysis.responseType || null,
             reasoning: taskAnalysis.reasoning,
             suggestedResponse: taskAnalysis.suggestedResponse,
             relevanceScore: source.relevanceScore,
@@ -157,24 +218,46 @@ exports.generateTasks = async (req, res) => {
     conversation.tasksGeneratedBy = req.user._id;
     await conversation.save();
 
+    // Count duplicates
+    const duplicateCount = suggestedTasks.filter(t => t.isDuplicate).length;
+
+    // Calculate filter efficiency
+    const filterEfficiency = sourcesToAnalyze.length > 0
+      ? ((filteredByHaiku / sourcesToAnalyze.length) * 100).toFixed(1)
+      : 0;
+
     // Emit completion
     if (global.io) {
       global.io.emit('task-generation:complete', {
         userId: req.user._id.toString(),
         conversationId: conversationId,
-        tasksGenerated: suggestedTasks.length
+        tasksGenerated: suggestedTasks.length,
+        filteredByHaiku: filteredByHaiku,
+        analyzedBySonnet: analyzedBySonnet,
+        filterEfficiency: `${filterEfficiency}%`
       });
     }
 
-    // Count duplicates
-    const duplicateCount = suggestedTasks.filter(t => t.isDuplicate).length;
+    console.log(`\n=== Two-Stage Filter Results ===`);
+    console.log(`Total sources: ${sourcesToAnalyze.length}`);
+    console.log(`Filtered by Haiku (Stage 1): ${filteredByHaiku} (${filterEfficiency}%)`);
+    console.log(`Analyzed by Sonnet (Stage 2): ${analyzedBySonnet}`);
+    console.log(`Tasks generated: ${suggestedTasks.length}`);
+    console.log(`Estimated cost savings: ~${filterEfficiency}% reduction in Sonnet calls`);
+    console.log(`================================\n`);
 
     res.json({
       success: true,
       suggestedTasks,
       totalAnalyzed: sourcesToAnalyze.length,
       tasksGenerated: suggestedTasks.length,
-      duplicateCount: duplicateCount
+      duplicateCount: duplicateCount,
+      filterMetrics: {
+        filteredByHaiku,
+        analyzedBySonnet,
+        filterEfficiency: `${filterEfficiency}%`,
+        estimatedCostSavings: `~${filterEfficiency}% reduction in Sonnet calls`
+      }
     });
 
   } catch (error) {
@@ -259,7 +342,8 @@ exports.createTaskFromSuggestion = async (req, res) => {
           timestamp: originalSource?.timestamp,
           conversationId: conversation._id,
           originalPlatform: suggestedTask.platform,
-          score: suggestedTask.score
+          score: suggestedTask.score,
+          responseType: suggestedTask.responseType || null
         };
         await task.save();
       } else {
@@ -278,7 +362,8 @@ exports.createTaskFromSuggestion = async (req, res) => {
             timestamp: originalSource?.timestamp,
             conversationId: conversation._id,
             originalPlatform: suggestedTask.platform,
-            score: suggestedTask.score
+            score: suggestedTask.score,
+            responseType: suggestedTask.responseType || null
           }
         });
       }
@@ -405,7 +490,7 @@ exports.rejectSuggestedTask = async (req, res) => {
   }
 };
 
-// Helper function to build the task generation prompt
+// Helper function to build the task generation prompt (legacy - kept for reference)
 function buildTaskGenerationPrompt(instructions, valuePropositions, question, answer, source) {
   return `${instructions}
 
@@ -432,6 +517,36 @@ Return your analysis in the following JSON format:
 {
   "shouldEngage": true/false,
   "score": <number out of 12>,
+  "responseType": "pure-help" | "help-with-sprinkle" | "strong-fit",
+  "reasoning": "<1-2 sentences explaining your decision>",
+  "suggestedResponse": "<the response text if engaging, or empty string if not>"
+}`;
+}
+
+// Helper function to build post content for cached analysis
+// Instructions + value props are sent as cached system messages
+function buildPostContentForCache(question, answer, source) {
+  return `## SUMMARY REPORT:
+**Question:** ${question}
+
+**Analysis:** ${answer}
+
+## POST TO ANALYZE:
+**Platform:** ${source.platform}
+**Author:** ${source.author}
+**Content:** ${source.content}
+**Link:** ${source.deeplink}
+**Relevance Score:** ${source.relevanceScore}
+
+---
+
+Please analyze this post using the scoring framework provided in the instructions above.
+
+Return your analysis in the following JSON format:
+{
+  "shouldEngage": true/false,
+  "score": <number out of 12>,
+  "responseType": "pure-help" | "help-with-sprinkle" | "strong-fit",
   "reasoning": "<1-2 sentences explaining your decision>",
   "suggestedResponse": "<the response text if engaging, or empty string if not>"
 }`;
