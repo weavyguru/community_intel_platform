@@ -125,7 +125,24 @@
 <!-- Confirmation Dialog -->
 <sl-dialog id="runJobDialog" label="Run Intelligence Job">
   <p>This will manually run the intelligence job and create tasks automatically.</p>
-  <p class="mt-2 text-sm text-gray-600">Are you sure you want to continue?</p>
+
+  <div class="mt-4 space-y-2">
+    <label class="block text-sm font-medium text-gray-700">
+      Lookback Period (hours)
+    </label>
+    <sl-input
+      id="lookbackHoursInput"
+      type="number"
+      min="1"
+      max="168"
+      value="48"
+      help-text="How far back to search content based on timestamps (1-168 hours)"
+    ></sl-input>
+    <p class="text-xs text-gray-500">
+      Default: 48 hours (recommended to catch recently imported historical content)
+    </p>
+  </div>
+
   <div slot="footer" class="flex gap-2 justify-end">
     <sl-button id="cancelRunBtn" variant="default">Cancel</sl-button>
     <sl-button id="confirmRunBtn" variant="primary">Run Job</sl-button>
@@ -355,6 +372,13 @@
     const dialog = document.getElementById('runJobDialog');
     const confirmButton = document.getElementById('confirmRunBtn');
     const runButton = document.getElementById('runJobBtn');
+    const lookbackHours = parseInt(document.getElementById('lookbackHoursInput').value);
+
+    // Validate lookback hours
+    if (!lookbackHours || lookbackHours < 1 || lookbackHours > 168) {
+      showToast('Lookback hours must be between 1 and 168', 'warning', 'exclamation-triangle');
+      return;
+    }
 
     dialog.hide();
     runButton.loading = true;
@@ -364,7 +388,11 @@
     clearRunningJobRow();
 
     try {
-      const response = await fetch('/api/admin/agent/run', { method: 'POST' });
+      const response = await fetch('/api/admin/agent/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lookbackHours })
+      });
       const data = await response.json();
 
       if (data.success) {

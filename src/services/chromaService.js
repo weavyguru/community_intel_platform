@@ -105,13 +105,24 @@ class ChromaService {
     }
   }
 
-  async searchByTimeRange(startDate, endDate, limit = null) {
+  async searchByTimeRange(startDate, endDate, limit = null, postsOnly = false) {
     try {
       await this.initialize();
 
       // Convert dates to Unix timestamps (seconds since epoch)
       const startUnix = Math.floor(startDate.getTime() / 1000);
       const endUnix = Math.floor(endDate.getTime() / 1000);
+
+      // Build where clause
+      const whereConditions = [
+        { timestamp_unix: { $gte: startUnix } },
+        { timestamp_unix: { $lte: endUnix } }
+      ];
+
+      // Add is_comment filter if postsOnly is true
+      if (postsOnly) {
+        whereConditions.push({ is_comment: { $eq: false } });
+      }
 
       // If no limit specified, get ALL results (handle pagination)
       if (limit === null) {
@@ -123,10 +134,7 @@ class ChromaService {
         while (hasMore) {
           const results = await this.collection.get({
             where: {
-              $and: [
-                { timestamp_unix: { $gte: startUnix } },
-                { timestamp_unix: { $lte: endUnix } }
-              ]
+              $and: whereConditions
             },
             limit: batchSize,
             offset: offset
@@ -149,10 +157,7 @@ class ChromaService {
       // If limit specified, use it directly
       const results = await this.collection.get({
         where: {
-          $and: [
-            { timestamp_unix: { $gte: startUnix } },
-            { timestamp_unix: { $lte: endUnix } }
-          ]
+          $and: whereConditions
         },
         limit
       });

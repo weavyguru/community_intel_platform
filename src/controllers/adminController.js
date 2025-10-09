@@ -353,7 +353,16 @@ exports.compareVersions = async (req, res) => {
 // @access  Private/Admin
 exports.runBackgroundAgent = async (req, res) => {
   try {
-    const result = await intelligenceJob.runManually();
+    const { lookbackHours } = req.body;
+
+    // Validate lookback hours if provided
+    if (lookbackHours !== undefined) {
+      if (!Number.isInteger(lookbackHours) || lookbackHours < 1 || lookbackHours > 168) {
+        return res.status(400).json({ error: 'Lookback hours must be an integer between 1 and 168' });
+      }
+    }
+
+    const result = await intelligenceJob.runManually(lookbackHours);
 
     res.json({
       success: true,

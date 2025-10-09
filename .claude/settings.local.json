@@ -26,7 +26,9 @@
       "Bash(taskkill:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Read(//c/**)",
+      "Bash(tasklist:*)"
     ],
     "deny": [],
     "ask": []

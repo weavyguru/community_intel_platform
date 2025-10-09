@@ -205,6 +205,77 @@ If no action needed, respond: {"needsAction": false}`;
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  async quickFilterWithHaiku(source) {
+    try {
+      const filterPrompt = `Quickly filter this post to remove obvious noise. Be PERMISSIVE - when in doubt, PASS it.
+
+**Post:**
+Platform: ${source.platform}
+Author: ${source.author}
+Content: ${source.content}
+
+**PASS (default for anything development-related):**
+- ANY mention of building/creating/working on apps, tools, websites, services, projects
+- "I built X" OR "I'm building X" (both pass - don't distinguish announcements vs active work)
+- Questions about implementing features in their work
+- Problems with their development/project
+- Individual creators sharing what they made (even if showcasing)
+- Questions about capabilities for their use case
+- Seeking help, advice, or contractors for their project
+- Technical questions related to software development
+- App ideas or planning stages
+
+**SKIP (only obvious noise):**
+- COMPANY press releases or announcements from organizations (not individuals)
+- Marketing/brand strategy posts from businesses
+- Research institution announcements (papers, breakthroughs)
+- Industry news articles or platform update announcements
+- Pure educational "What is X?" with no building context
+- Job postings or hiring announcements
+- Comments/replies in discussion threads
+- Completely off-topic to software development
+
+**Critical: Be PERMISSIVE. If post mentions ANY app/project/tool they're working on, PASS it. Trust the next stage to score it properly.**
+
+Respond ONLY with valid JSON:
+{
+  "shouldAnalyze": true/false,
+  "reason": "brief reason (10 words max)",
+  "appType": "type of app they're building, or 'company-announcement/news/job-posting' if noise"
+}`;
+
+      const response = await this._callClaudeWithRetry({
+        model: 'claude-3-5-haiku-20241022',
+        system: 'You are a fast filter for post classification. Respond only with valid JSON.',
+        messages: [{
+          role: 'user',
+          content: filterPrompt
+        }],
+        max_tokens: 150
+      });
+
+      const text = response.content[0].text.trim();
+      const cleanJson = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const result = JSON.parse(cleanJson);
+
+      return {
+        shouldAnalyze: result.shouldAnalyze,
+        reason: result.reason,
+        appType: result.appType,
+        usage: response.usage
+      };
+    } catch (error) {
+      console.error('Error in quick filter:', error);
+      // Default to analyzing if filter fails (safer)
+      return {
+        shouldAnalyze: true,
+        reason: 'Filter error - defaulting to analyze',
+        appType: 'unknown',
+        usage: null
+      };
+    }
+  }
+
   async analyzeForTask(prompt) {
     try {
       const response = await this._callClaudeWithRetry({
@@ -220,6 +291,50 @@ If no action needed, respond: {"needsAction": false}`;
       return response.content[0].text;
     } catch (error) {
       console.error('Error analyzing for task:', error);
+      throw error;
+    }
+  }
+
+  async analyzeForTaskWithCache(instructions, valuePropositions, postContent) {
+    try {
+      // Use prompt caching for static instructions + value props (7,862 tokens cached)
+      // Only post content is variable (~300 tokens per request)
+      // Caching saves 90% on input tokens: $15/1M → $1.50/1M
+      const response = await this._callClaudeWithRetry({
+        model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929',
+        system: [
+          {
+            type: "text",
+            text: instructions,
+            cache_control: { type: "ephemeral" }
+          },
+          {
+            type: "text",
+            text: `## WEAVY CONTEXT:\n${valuePropositions}`,
+            cache_control: { type: "ephemeral" }
+          }
+        ],
+        messages: [{
+          role: 'user',
+          content: postContent
+        }],
+        max_tokens: 1024
+      });
+
+      // Log cache usage metrics
+      const cacheWrite = response.usage?.cache_creation_input_tokens || 0;
+      const cacheRead = response.usage?.cache_read_input_tokens || 0;
+      const inputTokens = response.usage?.input_tokens || 0;
+      const outputTokens = response.usage?.output_tokens || 0;
+
+      console.log(`[Cache] Write: ${cacheWrite} | Read: ${cacheRead} | Input: ${inputTokens} | Output: ${outputTokens}`);
+
+      return {
+        text: response.content[0].text,
+        usage: response.usage
+      };
+    } catch (error) {
+      console.error('Error analyzing for task with cache:', error);
       throw error;
     }
   }
@@ -320,7 +435,7 @@ Respond ONLY with valid JSON:
 }`;
 
       const response = await client.messages.create({
-        model: this.model, // Use Sonnet 4.5
+        model: 'claude-3-5-haiku-20241022', // Use Haiku for simple evaluation
         max_tokens: 1500,
         system: systemPrompt,
         messages: [{

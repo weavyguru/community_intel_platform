@@ -814,15 +814,17 @@ Trends: ${includeTrends}`;
         if (conv.suggestedTasks && conv.suggestedTasks.length > 0) {
           displaySuggestedTasks(conv.suggestedTasks);
           genTasksBtn.style.display = 'none';
-
-          // Display analysis report if available
-          if (conv.taskGenerationReport && conv.taskGenerationReport.length > 0) {
-            const duplicateCount = conv.suggestedTasks.filter(t => t.isDuplicate).length;
-            displayAnalysisReport(conv.taskGenerationReport, conv.suggestedTasks.length, duplicateCount);
-          }
         } else {
-          genTasksBtn.style.display = 'inline-flex';
           document.getElementById('taskSuggestionsContainer').classList.add('hidden');
+          genTasksBtn.style.display = 'inline-flex';
+        }
+
+        // ALWAYS show analysis report if it exists (even when 0 tasks)
+        if (conv.taskGenerationReport && conv.taskGenerationReport.length > 0) {
+          const duplicateCount = conv.suggestedTasks?.filter(t => t.isDuplicate).length || 0;
+          const tasksCount = conv.suggestedTasks?.length || 0;
+          displayAnalysisReport(conv.taskGenerationReport, tasksCount, duplicateCount);
+        } else {
           document.getElementById('analysisReportContainer').classList.add('hidden');
         }
 
@@ -1323,15 +1325,18 @@ Trends: ${includeTrends}`;
 
   socket.on('task-generation:progress', (data) => {
     if (data.userId === '<%= user._id %>') {
-      document.getElementById('taskGenStatusText').textContent = `Analyzing source ${data.current} of ${data.total}`;
-      document.getElementById('taskGenStatusDetail').textContent = `${data.platform} - ${data.author}`;
+      const stage = data.stage === 'haiku' ? 'Filtering' : 'Analyzing';
+      const stageEmoji = data.stage === 'haiku' ? '🔍' : '🤖';
+      document.getElementById('taskGenStatusText').textContent = `${stageEmoji} ${stage} source ${data.current} of ${data.total}`;
+      document.getElementById('taskGenStatusDetail').textContent = `${data.platform} - ${data.author} | Model: ${data.model}`;
     }
   });
 
   socket.on('task-generation:complete', (data) => {
     if (data.userId === '<%= user._id %>') {
-      document.getElementById('taskGenStatusText').textContent = 'Analysis complete!';
-      document.getElementById('taskGenStatusDetail').textContent = `Generated ${data.tasksGenerated} task suggestions`;
+      document.getElementById('taskGenStatusText').textContent = '✅ Analysis complete!';
+      const efficiencyMsg = data.filterEfficiency ? ` | ${data.filterEfficiency} filtered by Haiku` : '';
+      document.getElementById('taskGenStatusDetail').textContent = `Generated ${data.tasksGenerated} task suggestions${efficiencyMsg}`;
       setTimeout(() => {
         document.getElementById('taskGenerationStatus').classList.add('hidden');
       }, 2000);
