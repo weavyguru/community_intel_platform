@@ -412,7 +412,8 @@ class IntelligenceJob {
             const responseTypeInfo = recentAnalysis.lastAnalyzedResponseType
               ? ` (${recentAnalysis.lastAnalyzedResponseType})`
               : '';
-            console.log(`[${processedCount}/${uniqueSources.length}] ⏭️ Already analyzed on ${analyzedDate} (score: ${recentAnalysis.lastAnalyzedScore}/12${responseTypeInfo}) - Skipping`);
+            const contentType = source.metadata?.is_comment ? 'comment' : 'post';
+            console.log(`[${processedCount}/${uniqueSources.length}] ⏭️ Already analyzed on ${analyzedDate} (score: ${recentAnalysis.lastAnalyzedScore}/12${responseTypeInfo}) - Skipping (${contentType})`);
 
             // Add to report as already analyzed
             analysisReport.push({
@@ -440,7 +441,8 @@ class IntelligenceJob {
 
         if (!filterResult.shouldAnalyze) {
           filteredByHaiku++;
-          console.log(`[${processedCount}/${uniqueSources.length}] 🔍 Haiku filtered: ${source.platform} - ${source.author} - ${filterResult.reason}`);
+          const contentType = source.metadata?.is_comment ? 'comment' : 'post';
+          console.log(`[${processedCount}/${uniqueSources.length}] 🔍 Haiku filtered: ${source.platform} - ${source.author} (${contentType}) - ${filterResult.reason}`);
 
           // Add to report as filtered
           analysisReport.push({
@@ -463,7 +465,8 @@ class IntelligenceJob {
 
         // STAGE 2: Full Sonnet analysis (for posts that passed Haiku)
         analyzedBySonnet++;
-        console.log(`[${processedCount}/${uniqueSources.length}] 🤖 Sonnet analyzing: ${source.platform} - ${source.author}`);
+        const contentType = source.metadata?.is_comment ? 'comment' : 'post';
+        console.log(`[${processedCount}/${uniqueSources.length}] 🤖 Sonnet analyzing: ${source.platform} - ${source.author} (${contentType})`);
 
         // Build post content for analysis (cached method separates static from variable content)
         const postContent = this.buildPostContentForCache(question, answer, source);
