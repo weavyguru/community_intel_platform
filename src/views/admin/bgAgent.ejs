@@ -396,9 +396,9 @@
       const data = await response.json();
 
       if (data.success) {
-        const result = data.result;
+        const result = data.result || {};
         showToast(
-          `Job completed successfully!\n\nProcessed: ${result.processed} items\nAnalyzed: ${result.analyzed} items\nTasks Created: ${result.tasksCreated}\nConversation ID: ${result.conversationId}`,
+          `Job completed successfully!\n\nProcessed: ${result.processed || 0} items\nAnalyzed: ${result.analyzed || 0} items\nTasks Created: ${result.tasksCreated || 0}\nConversation ID: ${result.conversationId || 'N/A'}`,
           'success',
           'check-circle',
           8000
