@@ -139,9 +139,9 @@ class IntelligenceJob {
       console.log(scheduleMsg);
       emitStatus('Starting job', `${timeRangeMsg} - ${lookbackMsg}`);
 
-      // STEP 2: Get all content from Chroma since last run (posts only, no comments)
-      emitStatus('Fetching from Chroma', 'Retrieving posts from time range (filtering comments)...');
-      const allContent = await chromaService.searchByTimeRange(startDate, endDate, null, true); // null limit = get ALL, true = posts only
+      // STEP 2: Get all content from Chroma since last run (posts + comments)
+      emitStatus('Fetching from Chroma', 'Retrieving all content from time range (posts + comments)...');
+      const allContent = await chromaService.searchByTimeRange(startDate, endDate, null, false); // null limit = get ALL, false = include comments
 
       if (allContent.length === 0) {
         emitStatus('No content found', 'No new content to analyze in time range');
