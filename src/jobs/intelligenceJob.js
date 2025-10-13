@@ -6,6 +6,7 @@ const ClaudeConversation = require('../models/ClaudeConversation');
 const Task = require('../models/Task');
 const JobRunHistory = require('../models/JobRunHistory');
 const User = require('../models/User');
+const AnalyzedPost = require('../models/AnalyzedPost');
 const emailService = require('../services/emailService');
 
 class IntelligenceJob {
@@ -277,8 +278,8 @@ class IntelligenceJob {
 
       emitStatus('Conversation saved', `Saved as: ${conversation._id}`);
 
-      // STEP 6: Run Task Generation Agent on all sources (Haiku → Sonnet filtering)
-      emitStatus('Generating tasks', `Analyzing ${newContent.length} sources with two-stage filtering...`);
+      // STEP 6: Run Task Generation Agent on all sources (Deduplication → Haiku → Sonnet filtering)
+      emitStatus('Generating tasks', `Analyzing ${newContent.length} sources with three-stage filtering...`);
       const createdTasks = await this.generateAndCreateTasks(
         conversation,
         taskConfig,
@@ -380,12 +381,13 @@ class IntelligenceJob {
       return true;
     });
 
-    console.log(`Analyzing ${uniqueSources.length} unique sources with two-stage filtering...`);
-    if (emitStatus) emitStatus('Analyzing sources', `Processing ${uniqueSources.length} unique sources with Haiku → Sonnet filtering...`);
+    console.log(`Analyzing ${uniqueSources.length} unique sources with three-stage filtering...`);
+    if (emitStatus) emitStatus('Analyzing sources', `Processing ${uniqueSources.length} unique sources with Dedup → Haiku → Sonnet filtering...`);
 
-    // Two-stage filtering: Haiku → Sonnet (same as taskGenerationController)
+    // Three-stage filtering: Deduplication → Haiku → Sonnet
     let processedCount = 0;
     let skippedCount = 0;
+    let alreadyAnalyzed = 0; // NEW: Track posts skipped due to recent analysis
     let filteredByHaiku = 0;
     let analyzedBySonnet = 0;
 
@@ -393,9 +395,45 @@ class IntelligenceJob {
     let totalCacheWrites = 0;
     let totalCacheReads = 0;
 
+    // Get reanalyze window from environment (default 30 days)
+    const REANALYZE_WINDOW_DAYS = parseInt(process.env.REANALYZE_WINDOW_DAYS) || 30;
+
     for (const source of uniqueSources) {
       try {
         processedCount++;
+
+        // STAGE 0: Deduplication check (skip if analyzed within REANALYZE_WINDOW_DAYS)
+        if (source.deeplink) {
+          const recentAnalysis = await AnalyzedPost.wasRecentlyAnalyzed(source.deeplink, REANALYZE_WINDOW_DAYS);
+
+          if (recentAnalysis) {
+            alreadyAnalyzed++;
+            const analyzedDate = recentAnalysis.lastAnalyzedAt.toLocaleDateString();
+            const responseTypeInfo = recentAnalysis.lastAnalyzedResponseType
+              ? ` (${recentAnalysis.lastAnalyzedResponseType})`
+              : '';
+            console.log(`[${processedCount}/${uniqueSources.length}] ⏭️ Already analyzed on ${analyzedDate} (score: ${recentAnalysis.lastAnalyzedScore}/12${responseTypeInfo}) - Skipping`);
+
+            // Add to report as already analyzed
+            analysisReport.push({
+              sourceId: source.id,
+              platform: source.platform,
+              author: source.author,
+              contentSnippet: source.content ? source.content.substring(0, 200) : '',
+              sourceDeeplink: source.deeplink,
+              score: recentAnalysis.lastAnalyzedScore,
+              shouldEngage: recentAnalysis.shouldEngage,
+              responseType: recentAnalysis.lastAnalyzedResponseType,
+              reasoning: `Already analyzed on ${analyzedDate} (${REANALYZE_WINDOW_DAYS}-day dedup window)`,
+              filteredStage: 'deduplication',
+              isComment: source.metadata?.is_comment || false,
+              relevanceScore: source.relevanceScore,
+              analyzedAt: recentAnalysis.lastAnalyzedAt
+            });
+
+            continue; // Skip Haiku AND Sonnet
+          }
+        }
 
         // STAGE 1: Quick Haiku filter
         const filterResult = await claudeService.quickFilterWithHaiku(source);
@@ -484,6 +522,19 @@ class IntelligenceJob {
               if (emitStatus) emitStatus('Task created', `${task.title} (score: ${taskAnalysis.score})`);
             }
           }
+
+          // Mark post as analyzed (for future deduplication)
+          if (source.deeplink) {
+            await AnalyzedPost.markAsAnalyzed({
+              deeplink: source.deeplink,
+              platform: source.platform,
+              author: source.author,
+              score: taskAnalysis.score,
+              responseType: taskAnalysis.responseType,
+              shouldEngage: taskAnalysis.shouldEngage,
+              conversationId: conversation._id
+            });
+          }
         }
 
       } catch (error) {
@@ -494,8 +545,13 @@ class IntelligenceJob {
     }
 
     // Print filter efficiency summary
-    const filterEfficiency = uniqueSources.length > 0
-      ? ((filteredByHaiku / uniqueSources.length) * 100).toFixed(1)
+    const dedupEfficiency = uniqueSources.length > 0
+      ? ((alreadyAnalyzed / uniqueSources.length) * 100).toFixed(1)
+      : 0;
+
+    const remainingAfterDedup = uniqueSources.length - alreadyAnalyzed;
+    const filterEfficiency = remainingAfterDedup > 0
+      ? ((filteredByHaiku / remainingAfterDedup) * 100).toFixed(1)
       : 0;
 
     // Calculate cache savings
@@ -504,15 +560,24 @@ class IntelligenceJob {
     const cacheCostSavings = (totalCacheReads * 15 / 1000000) - (totalCacheReads * 1.5 / 1000000); // 90% savings
     const cacheSavingsPercent = totalCacheReads > 0 ? 90 : 0;
 
+    // Calculate total cost savings
+    const totalCostReduction = dedupEfficiency;
+    const haikuCostReduction = filterEfficiency;
+
     console.log('');
-    console.log('=== Two-Stage Filter Results ===');
+    console.log('=== Three-Stage Filter Results ===');
     console.log(`Total sources: ${uniqueSources.length}`);
-    console.log(`Filtered by Haiku (Stage 1): ${filteredByHaiku} (${filterEfficiency}%)`);
+    console.log(`Already analyzed (Stage 0 - ${REANALYZE_WINDOW_DAYS}-day dedup): ${alreadyAnalyzed} (${dedupEfficiency}%)`);
+    console.log(`Filtered by Haiku (Stage 1): ${filteredByHaiku} (${filterEfficiency}% of remaining ${remainingAfterDedup})`);
     console.log(`Analyzed by Sonnet (Stage 2): ${analyzedBySonnet}`);
     console.log(`Cache Stats: ${cacheWriteCount} write, ${cacheReadCount} reads | Saved: $${cacheCostSavings.toFixed(2)} (${cacheSavingsPercent}% reduction on cached tokens)`);
     console.log(`Tasks generated: ${createdTasks.length}`);
-    console.log(`Estimated cost savings: ~${filterEfficiency}% reduction in Sonnet calls + ${cacheSavingsPercent}% on cached tokens`);
-    console.log('================================');
+    console.log(`Estimated cost savings:`);
+    console.log(`  - Deduplication: ${dedupEfficiency}% (skipped both Haiku + Sonnet)`);
+    console.log(`  - Haiku filter: ${filterEfficiency}% (skipped Sonnet on remaining)`);
+    console.log(`  - Prompt caching: ${cacheSavingsPercent}% (on Sonnet input tokens)`);
+    console.log(`  - Total reduction: ~${totalCostReduction}% fewer API calls`);
+    console.log('===================================');
     console.log('');
 
     if (emitStatus) {
