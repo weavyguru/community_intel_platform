@@ -624,7 +624,7 @@ class IntelligenceJob {
       // Create the task
       const task = await Task.create({
         title: taskTitle,
-        snippet: source.content?.substring(0, 300) || taskAnalysis.reasoning,
+        snippet: source.content || taskAnalysis.reasoning,
         sourceUrl: source.deeplink || '#',
         platform: mappedPlatform,
         intent: 'engagement',
