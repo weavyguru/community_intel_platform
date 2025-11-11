@@ -229,9 +229,12 @@ class HubSpotService {
             console.log(`   - Status: ${createdPost.state}`);
             console.log(`   - URL: ${createdPost.url || 'N/A'}`);
 
+            // Construct HubSpot editor URL
+            const editorUrl = `https://app.hubspot.com/blog/462967/editor/${createdPost.id}/content`;
+
             return {
                 id: createdPost.id,
-                url: createdPost.url,
+                url: editorUrl,
                 state: createdPost.state,
                 publishedAt: createdPost.publishDate ? new Date(createdPost.publishDate) : null,
                 imageUrl: uploadedImageUrl,
@@ -266,9 +269,12 @@ class HubSpotService {
 
             console.log(`Blog post updated successfully!`);
 
+            // Construct HubSpot editor URL
+            const editorUrl = `https://app.hubspot.com/blog/462967/editor/${updatedPost.id}/content`;
+
             return {
                 id: updatedPost.id,
-                url: updatedPost.url,
+                url: editorUrl,
                 state: updatedPost.state,
                 fullResponse: updatedPost
             };
