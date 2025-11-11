@@ -28,7 +28,18 @@
       "Bash(findstr:*)",
       "Bash(git fetch:*)",
       "Read(//c/**)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(dir C:Projectsbulk-blogging)",
+      "Bash(dir:*)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do cp \"C:\\Projects\\blog_image_creator\\bg$i.png\" \"C:\\Projects\\community_intel_platform\\src\\lib\\blogImageCreator\\assets\\backgrounds\\bg$i.png\")",
+      "Bash(done)",
+      "Bash(nul)",
+      "WebFetch(domain:www.weavy.com)",
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(\"C:\\Projects\\community_intel_platform\\public\\js\\blog.js\")",
+      "Bash(del \"C:\\Projects\\community_intel_platform\\src\\temp_instructions.js\")"
     ],
     "deny": [],
     "ask": []

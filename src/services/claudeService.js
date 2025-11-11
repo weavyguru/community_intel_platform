@@ -471,9 +471,13 @@ Respond ONLY with valid JSON:
     try {
       const client = this.getClient();
 
+      const platformsList = availablePlatforms && availablePlatforms.length > 0
+        ? availablePlatforms.join(', ')
+        : 'all platforms';
+
       const systemPrompt = `You are an expert search strategist using Claude Sonnet 4.5. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
 
-Available platforms: ${availablePlatforms.join(', ')}
+Available platforms: ${platformsList}
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -508,8 +512,8 @@ Rules:
 
 Question: "${question}"
 
-Available platforms: ${availablePlatforms.join(', ')}
-Total platforms: ${availablePlatforms.length}
+Available platforms: ${platformsList}
+Total platforms: ${availablePlatforms && availablePlatforms.length > 0 ? availablePlatforms.length : 'all'}
 
 Analyze the question's:
 1. Scope (single topic vs. broad analysis)

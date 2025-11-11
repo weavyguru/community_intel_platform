@@ -1,0 +1,355 @@
+<!-- Highlight.js for syntax highlighting - MUST load before Quill -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
+
+<!-- Quill with syntax highlighting - loads after Highlight.js -->
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+
+<style>
+  #blogEditorModal::part(body) {
+    padding: 0;
+  }
+  .cover-image-option {
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 3px solid transparent;
+  }
+  .cover-image-option:hover {
+    transform: scale(1.02);
+  }
+  .cover-image-option.selected {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  }
+  /* Quill editor styling */
+  .ql-container {
+    min-height: 400px;
+    font-size: 16px;
+  }
+  .ql-editor {
+    min-height: 400px;
+  }
+  .ql-toolbar.ql-snow {
+    background: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-bottom: 2px solid #cbd5e0;
+  }
+  .ql-container.ql-snow {
+    border: 1px solid #e2e8f0;
+  }
+
+  /* Match Weavy blog typography */
+  .ql-editor p {
+    line-height: 1.75;
+    margin-bottom: 1rem;
+  }
+
+  .ql-editor h1 {
+    font-size: 2.5rem;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+
+  .ql-editor h2 {
+    font-size: 2rem;
+    line-height: 1.2;
+    padding-top: 24px;
+    margin-bottom: 0.5rem;
+  }
+
+  .ql-editor h3 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    padding-top: 24px;
+    margin-bottom: 0.5rem;
+  }
+
+  .ql-editor blockquote {
+    font-size: 24px;
+    line-height: 32px;
+    margin: 40px 0;
+    padding: 20px;
+    border-left: 5px solid #667eea;
+    color: #6c757d;
+  }
+
+  .ql-editor ul,
+  .ql-editor ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .ql-editor li {
+    line-height: 1.75;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Code block styling */
+  .ql-editor pre.ql-syntax {
+    background-color: #282c34;
+    color: #abb2bf;
+    overflow: auto;
+    padding: 1em;
+    border-radius: 5px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Inline code styling */
+  .ql-editor code {
+    background-color: #f4f4f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #e83e8c;
+  }
+</style>
+
+<div class="space-y-8">
+  <!-- Header -->
+  <div class="flex justify-between items-start">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Blog Creator</h1>
+      <p class="mt-2 text-gray-600">Create data-driven blog posts from community insights</p>
+    </div>
+    <sl-button id="editInstructionsBtn" variant="default">
+      <sl-icon slot="prefix" name="gear"></sl-icon>
+      Edit Instructions
+    </sl-button>
+  </div>
+
+  <!-- Step 1: Search & Topic Generation -->
+  <div id="step1" class="bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Step 1: Discover Blog Topics</h2>
+      <p class="text-gray-600">Ask Claude to analyze community data and suggest relevant blog topics</p>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          What would you like to create blog posts about?
+        </label>
+        <sl-textarea
+          id="blogQuery"
+          placeholder="Example: I want to create blog posts on what Lovable users are struggling with the most"
+          rows="3"
+          resize="auto"
+          class="w-full"
+        ></sl-textarea>
+        <p class="mt-2 text-sm text-gray-500">
+          Claude will search the last 90 days of community data and suggest 5 relevant blog topics
+        </p>
+      </div>
+
+      <div>
+        <sl-button id="generateTopicsBtn" variant="primary" size="large">
+          <sl-icon slot="prefix" name="magic"></sl-icon>
+          Generate Blog Topics
+        </sl-button>
+      </div>
+
+      <!-- Status Display -->
+      <div id="searchStatus" class="hidden">
+        <sl-card class="bg-blue-50">
+          <div class="flex items-start gap-3">
+            <sl-spinner class="text-2xl"></sl-spinner>
+            <div class="flex-1">
+              <p id="searchStatusMessage" class="text-sm font-medium text-gray-900">Initializing...</p>
+              <sl-progress-bar id="searchProgress" class="mt-2" indeterminate></sl-progress-bar>
+
+              <!-- Status Log -->
+              <div id="searchLog" class="mt-3 space-y-1 text-xs text-gray-600 max-h-48 overflow-y-auto">
+              </div>
+            </div>
+          </div>
+        </sl-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Topic Selection -->
+  <div id="step2" class="hidden bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Step 2: Select Topics to Create</h2>
+      <p class="text-gray-600">Choose one or more topics to generate full blog posts</p>
+    </div>
+
+    <div id="topicsContainer" class="space-y-4 mb-6">
+      <!-- Topics will be inserted here -->
+    </div>
+
+    <div class="flex gap-3">
+      <sl-button id="generatePostsBtn" variant="primary" size="large" disabled>
+        <sl-icon slot="prefix" name="file-earmark-text"></sl-icon>
+        Generate Selected Blog Posts
+      </sl-button>
+      <sl-button id="backToStep1Btn" variant="default" size="large">
+        Back
+      </sl-button>
+    </div>
+
+    <!-- Generation Status -->
+    <div id="generationStatus" class="hidden mt-6">
+      <sl-card class="bg-blue-50">
+        <div class="flex items-start gap-3">
+          <sl-spinner class="text-2xl"></sl-spinner>
+          <div class="flex-1">
+            <p id="generationStatusMessage" class="text-sm font-medium text-gray-900">Generating blog posts...</p>
+            <sl-progress-bar id="generationProgress" class="mt-2" indeterminate></sl-progress-bar>
+
+            <div id="generationLog" class="mt-3 space-y-1 text-xs text-gray-600 max-h-48 overflow-y-auto">
+            </div>
+          </div>
+        </div>
+      </sl-card>
+    </div>
+  </div>
+
+  <!-- Step 3: Generated Posts List -->
+  <div id="step3" class="hidden bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Generated Blog Posts</h2>
+      <p class="text-gray-600">Review, edit, and publish your blog posts</p>
+    </div>
+
+    <div id="generatedPostsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+      <!-- Generated posts will be inserted here -->
+    </div>
+
+    <sl-button id="createMoreBtn" variant="default" size="large">
+      <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+      Create More Blog Posts
+    </sl-button>
+  </div>
+
+  <!-- Previously Published Blogs -->
+  <div id="publishedBlogs" class="bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Published Blogs</h2>
+      <p class="text-gray-600">View all previously published blog posts</p>
+    </div>
+
+    <div id="publishedPostsContainer" class="space-y-4">
+      <p class="text-gray-500 text-center py-8">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Instructions Editor Modal -->
+<sl-dialog id="instructionsModal" label="Edit Blog Creator Instructions" style="--width: 80vw; --header-spacing: 1rem;">
+  <div class="space-y-4">
+    <sl-alert variant="primary" open>
+      <sl-icon slot="icon" name="info-circle"></sl-icon>
+      <strong>Instructions Version Control</strong><br>
+      Changes create a new version. You can revert to previous versions anytime.
+    </sl-alert>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Topic Generation Instructions</label>
+      <sl-textarea id="topicInstructions" rows="10" resize="auto"
+        help-text="Instructions for Claude when generating 5 blog topic suggestions"
+        placeholder="Enter instructions for topic generation..."></sl-textarea>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Blog Post Writing Instructions</label>
+      <sl-textarea id="postInstructions" rows="10" resize="auto"
+        help-text="Instructions for Claude when writing the complete blog post"
+        placeholder="Enter instructions for blog post writing..."></sl-textarea>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Version Notes (Optional)</label>
+      <sl-input id="versionNotes" placeholder="e.g., Changed tone to be more casual"></sl-input>
+    </div>
+
+    <div class="mt-4">
+      <sl-details summary="View Previous Versions">
+        <div id="versionsList" class="space-y-2 mt-2">
+          <p class="text-gray-500 text-sm">Loading versions...</p>
+        </div>
+      </sl-details>
+    </div>
+  </div>
+
+  <div slot="footer" class="flex justify-between">
+    <sl-button id="saveInstructionsBtn" variant="primary">
+      <sl-icon slot="prefix" name="save"></sl-icon>
+      Save New Version
+    </sl-button>
+    <sl-button id="closeInstructionsBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Blog Editor Modal -->
+<sl-dialog id="blogEditorModal" label="Edit Blog Post" class="blog-editor-modal" style="--width: 90vw; --header-spacing: 1rem;">
+  <div class="editor-container">
+    <!-- Cover Images Selection -->
+    <div class="mb-6 p-4 bg-gray-50 rounded">
+      <label class="block text-sm font-medium text-gray-700 mb-3">Cover Image</label>
+      <div id="coverImagesGrid" class="grid grid-cols-5 gap-3 mb-3">
+        <!-- Cover images will be inserted here -->
+      </div>
+      <sl-button id="regenerateImagesBtn" variant="default" size="small">
+        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+        Regenerate Images
+      </sl-button>
+    </div>
+
+    <!-- Title & Subtitle -->
+    <div class="p-4 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+        <sl-input id="editTitle" placeholder="Blog post title"></sl-input>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Subtitle</label>
+        <sl-input id="editSubtitle" placeholder="Blog post subtitle"></sl-input>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Meta Description (SEO)</label>
+        <sl-textarea id="editMetaDescription" rows="2" placeholder="150-160 characters"></sl-textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">URL Slug</label>
+        <sl-input id="editSlug" placeholder="url-friendly-slug"></sl-input>
+      </div>
+
+      <!-- Quill WYSIWYG Editor -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Body</label>
+        <div id="editBodyEditor"></div>
+      </div>
+    </div>
+  </div>
+
+  <div slot="footer" class="flex justify-between">
+    <div class="flex gap-2">
+      <sl-button id="savePostBtn" variant="primary">
+        <sl-icon slot="prefix" name="save"></sl-icon>
+        Save
+      </sl-button>
+      <sl-button id="publishHubSpotBtn" variant="success">
+        <sl-icon slot="prefix" name="cloud-upload"></sl-icon>
+        Publish to HubSpot (Draft)
+      </sl-button>
+    </div>
+    <div class="flex gap-2">
+      <sl-button id="deletePostBtn" variant="danger" outline>
+        <sl-icon slot="prefix" name="trash"></sl-icon>
+        Delete
+      </sl-button>
+      <sl-button id="closeEditorBtn" variant="default">Close</sl-button>
+    </div>
+  </div>
+</sl-dialog>
+
+<!-- Load libraries before blog.js -->
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<script src="/js/blog.js"></script>

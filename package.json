@@ -10,7 +10,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
     "@monaco-editor/react": "^4.6.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@sendgrid/mail": "^8.1.0",
+    "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "chromadb": "^1.7.3",
     "chromadb-default-embed": "^2.14.0",
@@ -29,6 +31,7 @@
     "marked": "^11.1.0",
     "mongoose": "^8.0.0",
     "node-cron": "^3.0.3",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

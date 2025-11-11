@@ -23,6 +23,7 @@ const authRoutes = require('./src/routes/auth');
 const searchRoutes = require('./src/routes/search');
 const taskRoutes = require('./src/routes/tasks');
 const adminRoutes = require('./src/routes/admin');
+const blogRoutes = require('./src/routes/blog');
 
 // Import middleware
 const auth = require('./src/middleware/auth');
@@ -107,6 +108,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', searchRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/admin', adminRoutes);
+app.use(blogRoutes);
 
 // Users API endpoint
 const taskController = require('./src/controllers/taskController');
@@ -155,6 +157,29 @@ app.get('/tasks', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Tasks page error:', error);
+    res.status(500).send('Server error');
+  }
+});
+
+app.get('/blog', auth, async (req, res) => {
+  try {
+    const Task = require('./src/models/Task');
+    const taskCount = await Task.countDocuments({
+      isCompleted: false,
+      $or: [
+        { isSkipped: false },
+        { isSkipped: { $exists: false } }
+      ]
+    });
+
+    res.render('blog', {
+      title: 'Blog Creator - Community Intelligence',
+      activePage: 'blog',
+      user: req.user,
+      taskCount
+    });
+  } catch (error) {
+    console.error('Blog page error:', error);
     res.status(500).send('Server error');
   }
 });
