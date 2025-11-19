@@ -104,13 +104,19 @@ exports.createVersion = async (req, res) => {
         await BlogInstructions.updateMany({}, { isActive: false });
 
         // Create new version
-        const newInstructions = await BlogInstructions.create({
+        const newInstructionData = {
             version: newVersion,
             instructions,
             isActive: true,
-            createdBy: req.user._id,
             notes: notes || ''
-        });
+        };
+
+        // Add createdBy if user is authenticated
+        if (req.user && req.user._id) {
+            newInstructionData.createdBy = req.user._id;
+        }
+
+        const newInstructions = await BlogInstructions.create(newInstructionData);
 
         return res.json({
             success: true,
