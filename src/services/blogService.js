@@ -8,38 +8,41 @@ const BlogInstructions = require('../models/BlogInstructions');
 /**
  * Sanitize a string to remove invalid Unicode surrogate pairs
  * This prevents JSON encoding errors when sending to Claude API
- * Uses character-by-character approach for maximum compatibility
+ * ALWAYS processes the string - JSON.stringify doesn't catch lone surrogates in Node.js
  */
 function sanitizeUnicode(str) {
     if (typeof str !== 'string') return str;
+    if (str.length === 0) return str;
 
+    // ALWAYS clean - Node.js JSON.stringify doesn't throw for lone surrogates
     let result = '';
     for (let i = 0; i < str.length; i++) {
         const code = str.charCodeAt(i);
 
-        // Check if this is a high surrogate (U+D800 to U+DBFF)
-        if (code >= 0xD800 && code <= 0xDBFF) {
-            const nextCode = str.charCodeAt(i + 1);
-            // Check if next char is a valid low surrogate (U+DC00 to U+DFFF)
-            if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
-                // Valid surrogate pair - keep both
-                result += str[i] + str[i + 1];
-                i++; // Skip the low surrogate
-            } else {
-                // Lone high surrogate - replace with replacement char
-                result += '\uFFFD';
+        // Handle surrogate pairs
+        if (code >= 0xD800 && code <= 0xDFFF) {
+            // High surrogate (U+D800 to U+DBFF)
+            if (code <= 0xDBFF) {
+                // Check if next char is a valid low surrogate
+                if (i + 1 < str.length) {
+                    const nextCode = str.charCodeAt(i + 1);
+                    if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+                        // Valid surrogate pair - keep both characters
+                        result += str[i] + str[i + 1];
+                        i++; // Skip the low surrogate on next iteration
+                        continue;
+                    }
+                }
             }
+            // Lone surrogate (high without low, or low without preceding high)
+            // Skip it entirely - don't add anything
+            continue;
         }
-        // Check if this is a lone low surrogate (U+DC00 to U+DFFF)
-        else if (code >= 0xDC00 && code <= 0xDFFF) {
-            // Lone low surrogate - replace with replacement char
-            result += '\uFFFD';
-        }
-        else {
-            // Normal character
-            result += str[i];
-        }
+
+        // Normal character - keep it
+        result += str[i];
     }
+
     return result;
 }
 
@@ -306,12 +309,14 @@ Return your response as valid JSON only (no markdown, no code blocks):
         });
 
         const anthropic = getClaudeClient();
+        // Sanitize the FINAL prompt right before sending to ensure no invalid Unicode
+        const sanitizedPrompt = sanitizeUnicode(prompt);
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-5-20250929',
             max_tokens: 4096,
             messages: [{
                 role: 'user',
-                content: prompt
+                content: sanitizedPrompt
             }]
         });
 
@@ -457,12 +462,14 @@ Return your response as valid JSON only (no markdown, no code blocks):
 }`;
 
         // Use the same anthropic client instance from icon selection
+        // Sanitize the FINAL prompt right before sending to ensure no invalid Unicode
+        const sanitizedPrompt = sanitizeUnicode(prompt);
         const message = await anthropic.messages.create({
             model: 'claude-sonnet-4-5-20250929',
             max_tokens: 16000,
             messages: [{
                 role: 'user',
-                content: prompt
+                content: sanitizedPrompt
             }]
         });
 
