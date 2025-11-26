@@ -3,13 +3,39 @@ const { getClaudeClient, getClaudeModel } = require('../config/claude');
 /**
  * Sanitize a string to remove invalid Unicode surrogate pairs
  * This prevents JSON encoding errors when sending to Claude API
+ * Uses character-by-character approach for maximum compatibility
  */
 function sanitizeUnicode(str) {
   if (typeof str !== 'string') return str;
-  // Remove lone surrogates (high surrogate not followed by low surrogate, or lone low surrogate)
-  // High surrogates: U+D800 to U+DBFF
-  // Low surrogates: U+DC00 to U+DFFF
-  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+
+    // Check if this is a high surrogate (U+D800 to U+DBFF)
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const nextCode = str.charCodeAt(i + 1);
+      // Check if next char is a valid low surrogate (U+DC00 to U+DFFF)
+      if (nextCode >= 0xDC00 && nextCode <= 0xDFFF) {
+        // Valid surrogate pair - keep both
+        result += str[i] + str[i + 1];
+        i++; // Skip the low surrogate
+      } else {
+        // Lone high surrogate - replace with replacement char
+        result += '\uFFFD';
+      }
+    }
+    // Check if this is a lone low surrogate (U+DC00 to U+DFFF)
+    else if (code >= 0xDC00 && code <= 0xDFFF) {
+      // Lone low surrogate - replace with replacement char
+      result += '\uFFFD';
+    }
+    else {
+      // Normal character
+      result += str[i];
+    }
+  }
+  return result;
 }
 
 class ClaudeService {
