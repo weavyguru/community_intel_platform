@@ -251,13 +251,21 @@ async function generateBlogTopics(userQuery, searchResults, statusCallback = nul
     try {
         logStep('planning', 'start', 'Analyzing search results to generate blog topics...');
 
-        // Prepare context from search results (sanitize content to remove invalid Unicode)
+        // Prepare context from search results (sanitize ALL fields to remove invalid Unicode)
         const contextSources = searchResults.slice(0, 100).map((result, idx) => {
             const sanitizedContent = sanitizeUnicode(result.content || '').substring(0, 500);
-            return `[${idx + 1}] Platform: ${result.platform}
+            const sanitizedPlatform = sanitizeUnicode(result.platform || 'Unknown');
+            const sanitizedDeeplink = sanitizeUnicode(result.deeplink || '');
+            let dateStr = 'Unknown';
+            try {
+                dateStr = new Date(result.timestamp).toISOString().split('T')[0];
+            } catch (e) {
+                dateStr = 'Unknown';
+            }
+            return `[${idx + 1}] Platform: ${sanitizedPlatform}
 Content: ${sanitizedContent}
-URL: ${result.deeplink}
-Date: ${new Date(result.timestamp).toISOString().split('T')[0]}
+URL: ${sanitizedDeeplink}
+Date: ${dateStr}
 ---`;
         }).join('\n\n');
 
@@ -402,24 +410,36 @@ async function generateBlogPost(topic, synopsis, relevanceReason, searchResults,
         // Step 2: Generate blog content
         logStep('content', 'start', 'Writing blog post content with Claude Sonnet 4.5...');
 
-        // Prepare relevant sources for context (sanitize content to remove invalid Unicode)
+        // Prepare relevant sources for context (sanitize ALL fields to remove invalid Unicode)
         const contextSources = searchResults.slice(0, 50).map((result, idx) => {
             const sanitizedContent = sanitizeUnicode(result.content || '');
+            const sanitizedPlatform = sanitizeUnicode(result.platform || 'Unknown');
+            const sanitizedDeeplink = sanitizeUnicode(result.deeplink || '');
+            let dateStr = 'Unknown';
+            try {
+                dateStr = new Date(result.timestamp).toISOString().split('T')[0];
+            } catch (e) {
+                dateStr = 'Unknown';
+            }
             return `[Source ${idx + 1}]
-Platform: ${result.platform}
+Platform: ${sanitizedPlatform}
 Content: ${sanitizedContent}
-URL: ${result.deeplink}
-Date: ${new Date(result.timestamp).toISOString().split('T')[0]}
+URL: ${sanitizedDeeplink}
+Date: ${dateStr}
 ---`;
         }).join('\n\n');
 
         const instructionsData = await getInstructions();
+        const sanitizedPostInstructions = sanitizeUnicode(instructionsData.postGeneration || '');
+        const sanitizedTopic = sanitizeUnicode(topic || '');
+        const sanitizedSynopsis = sanitizeUnicode(synopsis || '');
+        const sanitizedRelevance = sanitizeUnicode(relevanceReason || '');
 
-        const prompt = `${instructionsData.postGeneration}
+        const prompt = `${sanitizedPostInstructions}
 
-Topic: ${topic}
-Synopsis: ${synopsis}
-Why This Matters: ${relevanceReason}
+Topic: ${sanitizedTopic}
+Synopsis: ${sanitizedSynopsis}
+Why This Matters: ${sanitizedRelevance}
 
 Here are real community discussions and feedback to inform your writing:
 
