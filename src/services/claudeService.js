@@ -1,5 +1,17 @@
 const { getClaudeClient, getClaudeModel } = require('../config/claude');
 
+/**
+ * Sanitize a string to remove invalid Unicode surrogate pairs
+ * This prevents JSON encoding errors when sending to Claude API
+ */
+function sanitizeUnicode(str) {
+  if (typeof str !== 'string') return str;
+  // Remove lone surrogates (high surrogate not followed by low surrogate, or lone low surrogate)
+  // High surrogates: U+D800 to U+DBFF
+  // Low surrogates: U+DC00 to U+DFFF
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+}
+
 class ClaudeService {
   constructor() {
     this.client = null;
@@ -20,8 +32,10 @@ class ClaudeService {
       const context = this._buildContext(chromaResults);
 
       const systemPrompt = instructions || 'You are a helpful AI assistant analyzing community feedback.';
+      // Sanitize question to prevent JSON encoding errors from invalid Unicode
+      const sanitizedQuestion = sanitizeUnicode(question || '');
 
-      const userMessage = `Based on the following community content, please answer this question: ${question}
+      const userMessage = `Based on the following community content, please answer this question: ${sanitizedQuestion}
 
 Community Content:
 ${context}
@@ -54,13 +68,16 @@ Please provide a comprehensive answer with relevant quotes and insights.`;
 
   async analyzeIntent(text) {
     try {
+      // Sanitize content to prevent JSON encoding errors from invalid Unicode
+      const sanitizedText = sanitizeUnicode(text || '');
+
       const response = await this._callClaudeWithRetry({
         system: 'You are an AI that identifies user intent from text. Respond with a single intent category.',
         messages: [{
           role: 'user',
           content: `Analyze this text and identify the primary intent. Choose from: feature_request, bug_report, question, feedback, competitive_intel, pricing_inquiry, integration_question, other.
 
-Text: ${text}
+Text: ${sanitizedText}
 
 Respond with only the intent category, no explanation.`
         }],
@@ -76,11 +93,14 @@ Respond with only the intent category, no explanation.`
 
   async summarizeContent(content, maxLength = 200) {
     try {
+      // Sanitize content to prevent JSON encoding errors from invalid Unicode
+      const sanitizedContent = sanitizeUnicode(content || '');
+
       const response = await this._callClaudeWithRetry({
         system: 'You are an AI that creates concise summaries.',
         messages: [{
           role: 'user',
-          content: `Summarize this content in ${maxLength} characters or less:\n\n${content}`
+          content: `Summarize this content in ${maxLength} characters or less:\n\n${sanitizedContent}`
         }],
         max_tokens: 150
       });
@@ -95,8 +115,10 @@ Respond with only the intent category, no explanation.`
   async identifyTrends(documents, instructions) {
     try {
       const context = this._buildContext(documents);
+      // Sanitize instructions to prevent JSON encoding errors from invalid Unicode
+      const sanitizedInstructions = sanitizeUnicode(instructions || '');
 
-      const systemPrompt = instructions || 'You are an AI that identifies trends and patterns in community discussions.';
+      const systemPrompt = sanitizedInstructions || 'You are an AI that identifies trends and patterns in community discussions.';
 
       const userMessage = `Analyze the following community content and identify key trends, patterns, and actionable insights:
 
@@ -126,10 +148,12 @@ Provide:
   async generateTaskFromContent(content, metadata, instructions) {
     try {
       const systemPrompt = instructions || 'You are an AI that creates actionable tasks from community content.';
+      // Sanitize content to prevent JSON encoding errors from invalid Unicode
+      const sanitizedContent = sanitizeUnicode(content || '');
 
       const userMessage = `Analyze this community content and determine if it requires action from the Weavy team:
 
-Content: ${content}
+Content: ${sanitizedContent}
 Platform: ${metadata.platform || 'Unknown'}
 Author: ${metadata.author || 'Unknown'}
 Engagement: ${metadata.engagement || 0}
@@ -207,12 +231,15 @@ If no action needed, respond: {"needsAction": false}`;
 
   async quickFilterWithHaiku(source) {
     try {
+      // Sanitize content to prevent JSON encoding errors
+      const sanitizedContent = sanitizeUnicode(source.content || '');
+
       const filterPrompt = `Quickly filter this post to remove obvious noise. Be PERMISSIVE - when in doubt, PASS it.
 
 **Post:**
 Platform: ${source.platform}
 Author: ${source.author}
-Content: ${source.content}
+Content: ${sanitizedContent}
 
 **PASS (default for anything development-related):**
 - ANY mention of building/creating/working on apps, tools, websites, services, projects
@@ -297,6 +324,11 @@ Respond ONLY with valid JSON:
 
   async analyzeForTaskWithCache(instructions, valuePropositions, postContent) {
     try {
+      // Sanitize all content to prevent JSON encoding errors from invalid Unicode
+      const sanitizedInstructions = sanitizeUnicode(instructions || '');
+      const sanitizedValueProps = sanitizeUnicode(valuePropositions || '');
+      const sanitizedPostContent = sanitizeUnicode(postContent || '');
+
       // Use prompt caching for static instructions + value props (7,862 tokens cached)
       // Only post content is variable (~300 tokens per request)
       // Caching saves 90% on input tokens: $15/1M → $1.50/1M
@@ -305,18 +337,18 @@ Respond ONLY with valid JSON:
         system: [
           {
             type: "text",
-            text: instructions,
+            text: sanitizedInstructions,
             cache_control: { type: "ephemeral" }
           },
           {
             type: "text",
-            text: `## WEAVY CONTEXT:\n${valuePropositions}`,
+            text: `## WEAVY CONTEXT:\n${sanitizedValueProps}`,
             cache_control: { type: "ephemeral" }
           }
         ],
         messages: [{
           role: 'user',
-          content: postContent
+          content: sanitizedPostContent
         }],
         max_tokens: 1024
       });
@@ -341,11 +373,14 @@ Respond ONLY with valid JSON:
 
   async askSimple(prompt) {
     try {
+      // Sanitize prompt to prevent JSON encoding errors from invalid Unicode
+      const sanitizedPrompt = sanitizeUnicode(prompt || '');
+
       const response = await this._callClaudeWithRetry({
         model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929',
         messages: [{
           role: 'user',
-          content: prompt
+          content: sanitizedPrompt
         }],
         max_tokens: 4096
       });
@@ -363,13 +398,15 @@ Respond ONLY with valid JSON:
   async generateTitle(question) {
     try {
       const client = this.getClient();
+      // Sanitize content to prevent JSON encoding errors from invalid Unicode
+      const sanitizedQuestion = sanitizeUnicode(question || '');
 
       const response = await client.messages.create({
         model: 'claude-3-5-haiku-20241022',
         max_tokens: 50,
         messages: [{
           role: 'user',
-          content: `Generate a concise 4-6 word title for this question. Only respond with the title, nothing else:\n\n${question}`
+          content: `Generate a concise 4-6 word title for this question. Only respond with the title, nothing else:\n\n${sanitizedQuestion}`
         }]
       });
 
@@ -400,9 +437,12 @@ Respond ONLY with valid JSON:
         iteration: iteration
       };
 
+      // Sanitize question to prevent JSON encoding errors from invalid Unicode
+      const sanitizedQuestion = sanitizeUnicode(question || '');
+
       const userMessage = `Evaluate these search results for completeness:
 
-Original Question: "${question}"
+Original Question: "${sanitizedQuestion}"
 
 Current Results Summary:
 - Total results: ${resultsSummary.totalResults}
@@ -416,7 +456,7 @@ Original Search Plan:
 - Coverage goals: ${JSON.stringify(searchPlan.coverageGoals, null, 2)}
 
 Sample of results (first 3):
-${currentResults.slice(0, 3).map((r, i) => `${i + 1}. Platform: ${r.metadata?.platform}, Content: ${r.content.substring(0, 150)}...`).join('\n')}
+${currentResults.slice(0, 3).map((r, i) => `${i + 1}. Platform: ${r.metadata?.platform}, Content: ${sanitizeUnicode(r.content || '').substring(0, 150)}...`).join('\n')}
 
 Respond ONLY with valid JSON:
 {
@@ -508,9 +548,12 @@ Rules:
 - Plan for follow-up iterations if topic is broad or comparative
 - Optimize query text for semantic search (focus on key concepts)`;
 
+      // Sanitize question to prevent JSON encoding errors from invalid Unicode
+      const sanitizedQuestion = sanitizeUnicode(question || '');
+
       const userMessage = `Generate a comprehensive search strategy for this question:
 
-Question: "${question}"
+Question: "${sanitizedQuestion}"
 
 Available platforms: ${platformsList}
 Total platforms: ${availablePlatforms && availablePlatforms.length > 0 ? availablePlatforms.length : 'all'}
@@ -576,12 +619,14 @@ Respond with ONLY the JSON object.`;
 
     return results.map((result, index) => {
       const metadata = result.metadata || {};
+      // Sanitize content to remove invalid Unicode surrogate pairs
+      const sanitizedContent = sanitizeUnicode(result.content || result.documents || '');
       return `
 [Source ${index + 1}]
 Platform: ${metadata.platform || 'Unknown'}
 Author: ${metadata.author || 'Unknown'}
 Date: ${metadata.timestamp || 'Unknown'}
-Content: ${result.content || result.documents}
+Content: ${sanitizedContent}
 ---`;
     }).join('\n');
   }

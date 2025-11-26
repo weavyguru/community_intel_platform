@@ -6,6 +6,18 @@ const { getClaudeClient } = require('../config/claude');
 const BlogInstructions = require('../models/BlogInstructions');
 
 /**
+ * Sanitize a string to remove invalid Unicode surrogate pairs
+ * This prevents JSON encoding errors when sending to Claude API
+ */
+function sanitizeUnicode(str) {
+    if (typeof str !== 'string') return str;
+    // Remove lone surrogates (high surrogate not followed by low surrogate, or lone low surrogate)
+    // High surrogates: U+D800 to U+DBFF
+    // Low surrogates: U+DC00 to U+DFFF
+    return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+}
+
+/**
  * Get active blog instructions from database or use defaults
  */
 async function getInstructions() {
@@ -213,20 +225,23 @@ async function generateBlogTopics(userQuery, searchResults, statusCallback = nul
     try {
         logStep('planning', 'start', 'Analyzing search results to generate blog topics...');
 
-        // Prepare context from search results
+        // Prepare context from search results (sanitize content to remove invalid Unicode)
         const contextSources = searchResults.slice(0, 100).map((result, idx) => {
+            const sanitizedContent = sanitizeUnicode(result.content || '').substring(0, 500);
             return `[${idx + 1}] Platform: ${result.platform}
-Content: ${result.content.substring(0, 500)}
+Content: ${sanitizedContent}
 URL: ${result.deeplink}
 Date: ${new Date(result.timestamp).toISOString().split('T')[0]}
 ---`;
         }).join('\n\n');
 
         const instructionsData = await getInstructions();
+        const sanitizedQuery = sanitizeUnicode(userQuery);
+        const sanitizedInstructions = sanitizeUnicode(instructionsData.topicGeneration);
 
-        const prompt = `${instructionsData.topicGeneration}
+        const prompt = `${sanitizedInstructions}
 
-User Request: "${userQuery}"
+User Request: "${sanitizedQuery}"
 
 Here are ${searchResults.length} community posts and discussions from the last 90 days:
 
@@ -361,11 +376,12 @@ async function generateBlogPost(topic, synopsis, relevanceReason, searchResults,
         // Step 2: Generate blog content
         logStep('content', 'start', 'Writing blog post content with Claude Sonnet 4.5...');
 
-        // Prepare relevant sources for context
+        // Prepare relevant sources for context (sanitize content to remove invalid Unicode)
         const contextSources = searchResults.slice(0, 50).map((result, idx) => {
+            const sanitizedContent = sanitizeUnicode(result.content || '');
             return `[Source ${idx + 1}]
 Platform: ${result.platform}
-Content: ${result.content}
+Content: ${sanitizedContent}
 URL: ${result.deeplink}
 Date: ${new Date(result.timestamp).toISOString().split('T')[0]}
 ---`;
