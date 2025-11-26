@@ -511,8 +511,9 @@ class IntelligenceJob {
             analyzedAt: new Date()
           });
 
-          // Auto-create task if should engage (this is the key difference)
-          if (taskAnalysis.shouldEngage) {
+          // Auto-create task if should engage AND score >= 7 (HIGH or MEDIUM priority only)
+          // Skip LOW priority tasks (score < 7)
+          if (taskAnalysis.shouldEngage && taskAnalysis.score >= 7) {
             const task = await this.createTaskFromAnalysis(
               taskAnalysis,
               source,
@@ -524,6 +525,8 @@ class IntelligenceJob {
               console.log(`Auto-created task: ${task.title} (score: ${taskAnalysis.score})`);
               if (emitStatus) emitStatus('Task created', `${task.title} (score: ${taskAnalysis.score})`);
             }
+          } else if (taskAnalysis.shouldEngage && taskAnalysis.score < 7) {
+            console.log(`[${source.platform}] Skipping LOW priority task (score: ${taskAnalysis.score})`);
           }
 
           // Mark post as analyzed (for future deduplication)
