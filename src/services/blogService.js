@@ -4,6 +4,7 @@ const { selectIconsForTopic } = require('../lib/blogImageCreator/iconSelector');
 const { generateVariations } = require('../lib/blogImageCreator/generator');
 const { getClaudeClient } = require('../config/claude');
 const BlogInstructions = require('../models/BlogInstructions');
+const Persona = require('../models/Persona');
 
 /**
  * Sanitize a string to remove invalid Unicode surrogate pairs
@@ -47,14 +48,31 @@ function sanitizeUnicode(str) {
 }
 
 /**
- * Get active blog instructions from database or use defaults
+ * Get a persona by ID
  */
-async function getInstructions() {
+async function getPersonaById(personaId) {
+    if (!personaId) return null;
+    try {
+        const persona = await Persona.findById(personaId);
+        return persona;
+    } catch (error) {
+        console.warn('Failed to load persona:', error.message);
+        return null;
+    }
+}
+
+/**
+ * Get active blog instructions from database or use defaults
+ * Optionally applies persona modifiers to the post generation instructions
+ */
+async function getInstructions(personaId = null) {
+    let result;
+
     try {
         const instructions = await BlogInstructions.findOne({ isActive: true });
         if (instructions && instructions.instructions) {
             const parsed = JSON.parse(instructions.instructions);
-            return {
+            result = {
                 topicGeneration: parsed.topicGeneration,
                 postGeneration: parsed.postGeneration
             };
@@ -63,9 +81,10 @@ async function getInstructions() {
         console.warn('Failed to load instructions from database, using defaults:', error.message);
     }
 
-    // Default instructions
-    return {
-        topicGeneration: `You are a content strategist analyzing community feedback to suggest blog post topics.
+    // Use default instructions if none found
+    if (!result) {
+        result = {
+            topicGeneration: `You are a content strategist analyzing community feedback to suggest blog post topics.
 
 Guidelines:
 - Topics should address real pain points, questions, or interests shown in the data
@@ -74,7 +93,7 @@ Guidelines:
 - Prioritize topics with clear evidence from multiple community posts
 - Make topics practical and helpful`,
 
-        postGeneration: `You are an expert technical content writer creating a blog post for a developer audience.
+            postGeneration: `You are an expert technical content writer creating a blog post for a developer audience.
 
 Guidelines:
 - Write in a clear, engaging, conversational tone
@@ -86,7 +105,19 @@ Guidelines:
 - Start with a compelling introduction
 - Use subheadings to organize content
 - End with a clear conclusion or call-to-action`
-    };
+        };
+    }
+
+    // Apply persona modifiers if specified
+    if (personaId) {
+        const persona = await getPersonaById(personaId);
+        if (persona && !persona.isDefault && persona.postModifier) {
+            result.postGeneration += `\n\n## Voice/Style:\n${persona.postModifier}`;
+            console.log(`[Blog Service] Applied persona "${persona.name}" to post generation`);
+        }
+    }
+
+    return result;
 }
 
 /**
@@ -370,8 +401,9 @@ Return your response as valid JSON only (no markdown, no code blocks):
 /**
  * Generate a complete blog post for a given topic
  * Includes cover image generation, title, subtitle, and body content
+ * @param {string} personaId - Optional persona ID to apply voice/style to the post
  */
-async function generateBlogPost(topic, synopsis, relevanceReason, searchResults, statusCallback = null) {
+async function generateBlogPost(topic, synopsis, relevanceReason, searchResults, personaId = null, statusCallback = null) {
     const log = [];
     const logStep = (step, status, message, data = {}) => {
         const entry = {
@@ -434,7 +466,7 @@ Date: ${dateStr}
 ---`;
         }).join('\n\n');
 
-        const instructionsData = await getInstructions();
+        const instructionsData = await getInstructions(personaId);
         const sanitizedPostInstructions = sanitizeUnicode(instructionsData.postGeneration || '');
         const sanitizedTopic = sanitizeUnicode(topic || '');
         const sanitizedSynopsis = sanitizeUnicode(synopsis || '');

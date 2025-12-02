@@ -143,7 +143,20 @@
         </p>
       </div>
 
-      <div>
+      <!-- Persona Selection -->
+      <div class="flex items-end gap-4">
+        <div class="flex-1 max-w-xs">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Writing Persona
+          </label>
+          <sl-select id="personaSelect" placeholder="Select a persona" clearable hoist>
+            <sl-option value="">Neutral (Default)</sl-option>
+            <!-- Options populated dynamically -->
+          </sl-select>
+        </div>
+        <sl-button id="managePersonasBtn" variant="text" size="medium">
+          <sl-icon name="gear"></sl-icon>
+        </sl-button>
         <sl-button id="generateTopicsBtn" variant="primary" size="large">
           <sl-icon slot="prefix" name="magic"></sl-icon>
           Generate Blog Topics
@@ -280,6 +293,61 @@
       Save New Version
     </sl-button>
     <sl-button id="closeInstructionsBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Persona Manager Modal -->
+<sl-dialog id="personaModal" label="Manage Writing Personas" style="--width: 60vw; --header-spacing: 1rem;">
+  <div class="space-y-4">
+    <sl-alert variant="primary" open>
+      <sl-icon slot="icon" name="info-circle"></sl-icon>
+      <strong>Writing Personas</strong><br>
+      Personas define the voice and style for blog post writing. Select a persona when generating posts to customize the tone.
+    </sl-alert>
+
+    <!-- Existing Personas List -->
+    <div>
+      <h3 class="text-sm font-medium text-gray-700 mb-2">Existing Personas</h3>
+      <div id="personasList" class="space-y-2">
+        <p class="text-gray-500 text-sm">Loading personas...</p>
+      </div>
+    </div>
+
+    <!-- Add New Persona Form -->
+    <sl-details summary="Add New Persona" id="addPersonaDetails">
+      <div class="space-y-3 p-4 bg-gray-50 rounded mt-2">
+        <sl-input id="newPersonaName" label="Persona Name" placeholder="e.g., CEO of Weavy, Technical Expert"></sl-input>
+        <sl-textarea id="newPersonaDescription" label="Description" rows="2"
+          placeholder="Brief description of this persona's role or perspective"></sl-textarea>
+        <sl-textarea id="newPersonaPostModifier" label="Writing Style Instructions" rows="6"
+          help-text="How should the blog post be written when using this persona?"
+          placeholder="e.g., Write in a conversational, authoritative tone. Use personal anecdotes and industry insights. Reference Weavy's mission and values where relevant..."></sl-textarea>
+        <sl-button id="createPersonaBtn" variant="primary">
+          <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+          Create Persona
+        </sl-button>
+      </div>
+    </sl-details>
+  </div>
+
+  <div slot="footer">
+    <sl-button id="closePersonaModalBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Edit Persona Modal -->
+<sl-dialog id="editPersonaModal" label="Edit Persona" style="--width: 50vw;">
+  <div class="space-y-3">
+    <sl-input id="editPersonaName" label="Persona Name"></sl-input>
+    <sl-textarea id="editPersonaDescription" label="Description" rows="2"></sl-textarea>
+    <sl-textarea id="editPersonaPostModifier" label="Writing Style Instructions" rows="6"></sl-textarea>
+  </div>
+  <div slot="footer" class="flex justify-between">
+    <sl-button id="updatePersonaBtn" variant="primary">
+      <sl-icon slot="prefix" name="save"></sl-icon>
+      Save Changes
+    </sl-button>
+    <sl-button id="closeEditPersonaBtn" variant="default">Cancel</sl-button>
   </div>
 </sl-dialog>
 

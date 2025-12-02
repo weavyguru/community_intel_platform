@@ -4,6 +4,8 @@ let currentTopicId = null;
 let currentPostId = null;
 let selectedTopicIndices = [];
 let quillEditor = null;
+let selectedPersonaId = null;
+let editingPersonaId = null;
 
 // Socket.IO connection for real-time updates
 const socket = io();
@@ -12,6 +14,7 @@ const socket = io();
 document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
     loadPublishedBlogs();
+    loadPersonas();
 });
 
 function initializeEventListeners() {
@@ -43,6 +46,20 @@ function initializeEventListeners() {
     document.getElementById('publishHubSpotBtn').addEventListener('click', publishToHubSpot);
     document.getElementById('deletePostBtn').addEventListener('click', deletePost);
     document.getElementById('regenerateImagesBtn').addEventListener('click', regenerateImages);
+
+    // Persona management
+    document.getElementById('personaSelect').addEventListener('sl-change', (e) => {
+        selectedPersonaId = e.target.value || null;
+    });
+    document.getElementById('managePersonasBtn').addEventListener('click', openPersonaManager);
+    document.getElementById('createPersonaBtn').addEventListener('click', createPersona);
+    document.getElementById('closePersonaModalBtn').addEventListener('click', () => {
+        document.getElementById('personaModal').hide();
+    });
+    document.getElementById('updatePersonaBtn').addEventListener('click', updatePersona);
+    document.getElementById('closeEditPersonaBtn').addEventListener('click', () => {
+        document.getElementById('editPersonaModal').hide();
+    });
 
     // Socket.IO listeners
     socket.on('blog:status', handleSearchStatus);
@@ -283,7 +300,8 @@ async function generateBlogPosts() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 topicId: currentTopicId,
-                selectedTopicIndices
+                selectedTopicIndices,
+                personaId: selectedPersonaId
             })
         });
 
@@ -870,4 +888,229 @@ async function activateVersion(versionId) {
         console.error('Error activating version:', error);
         showToast('Error activating version', 'danger', 'exclamation-triangle');
     }
+}
+
+// ============================================
+// Persona Management Functions
+// ============================================
+
+// Load personas into the dropdown
+async function loadPersonas() {
+    try {
+        const response = await fetch('/api/blog/personas');
+        const data = await response.json();
+
+        if (data.success) {
+            const select = document.getElementById('personaSelect');
+            // Clear existing options except default
+            select.innerHTML = '<sl-option value="">Neutral (Default)</sl-option>';
+
+            data.personas.forEach(persona => {
+                if (!persona.isDefault) {
+                    const option = document.createElement('sl-option');
+                    option.value = persona._id;
+                    option.textContent = persona.name;
+                    select.appendChild(option);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading personas:', error);
+    }
+}
+
+// Open persona manager modal
+async function openPersonaManager() {
+    await loadPersonasList();
+    document.getElementById('personaModal').show();
+}
+
+// Load personas list for management
+async function loadPersonasList() {
+    try {
+        const response = await fetch('/api/blog/personas');
+        const data = await response.json();
+
+        const container = document.getElementById('personasList');
+
+        if (!data.success || data.personas.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No personas created yet. Create one below!</p>';
+            return;
+        }
+
+        container.innerHTML = data.personas.map(persona => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded border">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                        <strong class="text-gray-900">${escapeHtml(persona.name)}</strong>
+                        ${persona.isDefault ? '<sl-badge variant="neutral" size="small">Default</sl-badge>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">${escapeHtml(persona.description) || 'No description'}</p>
+                </div>
+                ${!persona.isDefault ? `
+                    <div class="flex gap-2 ml-4">
+                        <sl-button size="small" variant="default" onclick="editPersona('${persona._id}')">
+                            <sl-icon name="pencil"></sl-icon>
+                        </sl-button>
+                        <sl-button size="small" variant="danger" outline onclick="deletePersona('${persona._id}')">
+                            <sl-icon name="trash"></sl-icon>
+                        </sl-button>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading personas list:', error);
+        document.getElementById('personasList').innerHTML =
+            '<p class="text-red-500 text-sm">Failed to load personas</p>';
+    }
+}
+
+// Create new persona
+async function createPersona() {
+    const btn = document.getElementById('createPersonaBtn');
+    btn.loading = true;
+
+    try {
+        const name = document.getElementById('newPersonaName').value.trim();
+        const description = document.getElementById('newPersonaDescription').value.trim();
+        const postModifier = document.getElementById('newPersonaPostModifier').value.trim();
+
+        if (!name) {
+            showToast('Persona name is required', 'warning', 'exclamation-triangle');
+            btn.loading = false;
+            return;
+        }
+
+        const response = await fetch('/api/blog/personas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, postModifier })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`Persona "${name}" created!`, 'success', 'check-circle');
+            // Clear form
+            document.getElementById('newPersonaName').value = '';
+            document.getElementById('newPersonaDescription').value = '';
+            document.getElementById('newPersonaPostModifier').value = '';
+            // Close the details
+            document.getElementById('addPersonaDetails').removeAttribute('open');
+            // Refresh lists
+            await loadPersonas();
+            await loadPersonasList();
+        } else {
+            showToast(data.error || 'Failed to create persona', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error creating persona:', error);
+        showToast('Error creating persona', 'danger', 'exclamation-triangle');
+    } finally {
+        btn.loading = false;
+    }
+}
+
+// Edit persona - open edit modal
+async function editPersona(personaId) {
+    try {
+        const response = await fetch(`/api/blog/personas/${personaId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            editingPersonaId = personaId;
+            document.getElementById('editPersonaName').value = data.persona.name || '';
+            document.getElementById('editPersonaDescription').value = data.persona.description || '';
+            document.getElementById('editPersonaPostModifier').value = data.persona.postModifier || '';
+            document.getElementById('editPersonaModal').show();
+        } else {
+            showToast(data.error || 'Failed to load persona', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error loading persona:', error);
+        showToast('Error loading persona', 'danger', 'exclamation-triangle');
+    }
+}
+
+// Update persona
+async function updatePersona() {
+    if (!editingPersonaId) return;
+
+    const btn = document.getElementById('updatePersonaBtn');
+    btn.loading = true;
+
+    try {
+        const name = document.getElementById('editPersonaName').value.trim();
+        const description = document.getElementById('editPersonaDescription').value.trim();
+        const postModifier = document.getElementById('editPersonaPostModifier').value.trim();
+
+        if (!name) {
+            showToast('Persona name is required', 'warning', 'exclamation-triangle');
+            btn.loading = false;
+            return;
+        }
+
+        const response = await fetch(`/api/blog/personas/${editingPersonaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description, postModifier })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Persona updated!', 'success', 'check-circle');
+            document.getElementById('editPersonaModal').hide();
+            editingPersonaId = null;
+            // Refresh lists
+            await loadPersonas();
+            await loadPersonasList();
+        } else {
+            showToast(data.error || 'Failed to update persona', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error updating persona:', error);
+        showToast('Error updating persona', 'danger', 'exclamation-triangle');
+    } finally {
+        btn.loading = false;
+    }
+}
+
+// Delete persona
+async function deletePersona(personaId) {
+    if (!confirm('Are you sure you want to delete this persona?')) return;
+
+    try {
+        const response = await fetch(`/api/blog/personas/${personaId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Persona deleted', 'success', 'check-circle');
+            // If this was the selected persona, reset selection
+            if (selectedPersonaId === personaId) {
+                selectedPersonaId = null;
+                document.getElementById('personaSelect').value = '';
+            }
+            // Refresh lists
+            await loadPersonas();
+            await loadPersonasList();
+        } else {
+            showToast(data.error || 'Failed to delete persona', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error deleting persona:', error);
+        showToast('Error deleting persona', 'danger', 'exclamation-triangle');
+    }
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

@@ -13,6 +13,7 @@ const path = require('path');
 const connectDB = require('./src/config/database');
 const { initializeSendGrid } = require('./src/config/sendgrid');
 const intelligenceJob = require('./src/jobs/intelligenceJob');
+const Persona = require('./src/models/Persona');
 
 // Load version
 const versionFile = path.join(__dirname, 'version.json');
@@ -38,6 +39,29 @@ connectDB();
 
 // Initialize SendGrid
 initializeSendGrid();
+
+// Seed default persona if not exists
+async function seedDefaultPersona() {
+  try {
+    const existing = await Persona.findOne({ isDefault: true });
+    if (!existing) {
+      await Persona.create({
+        name: 'Neutral',
+        description: 'Default persona with no style modifications',
+        postModifier: '',
+        isDefault: true,
+        isActive: true,
+        sortOrder: 0
+      });
+      console.log('Default Neutral persona created');
+    }
+  } catch (error) {
+    console.warn('Failed to seed default persona:', error.message);
+  }
+}
+
+// Run persona seeding after a short delay to ensure DB is connected
+setTimeout(seedDefaultPersona, 2000);
 
 // Security middleware
 app.use(helmet({

@@ -99,7 +99,7 @@ exports.searchAndPlanTopics = async (req, res) => {
  */
 exports.generateBlogPosts = async (req, res) => {
     try {
-        const { topicId, selectedTopicIndices } = req.body;
+        const { topicId, selectedTopicIndices, personaId } = req.body;
 
         if (!topicId || !selectedTopicIndices || selectedTopicIndices.length === 0) {
             return res.status(400).json({
@@ -143,12 +143,13 @@ exports.generateBlogPosts = async (req, res) => {
             });
 
             try {
-                // Generate the blog post
+                // Generate the blog post (with optional persona for voice/style)
                 const blogPostData = await blogService.generateBlogPost(
                     selectedTopic.title,
                     selectedTopic.synopsis,
                     selectedTopic.relevanceReason,
                     blogTopicDoc.searchResults,
+                    personaId || null,
                     emitStatus
                 );
 
