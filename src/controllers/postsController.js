@@ -133,26 +133,10 @@ exports.generate = async (req, res) => {
             });
         }
 
-        // Generate image
-        emit('postGenerationProgress', {
-            step: 'image',
-            status: 'start',
-            message: 'Generating AI image with DALL-E 3...'
-        });
-
-        const { imageUrl, imagePrompt } = await postService.generatePostImage(query, (status) => {
-            emit('postImageProgress', status);
-        });
-
-        emit('postGenerationProgress', {
-            step: 'image',
-            status: 'complete',
-            message: imageUrl ? 'Image generated successfully' : 'Image generation skipped'
-        });
-
         // Generate posts for each platform × persona combination
         const generatedPosts = [];
         let completedCount = 0;
+        let firstPostContent = null;
 
         for (const platform of platforms) {
             for (const persona of personas) {
@@ -178,7 +162,12 @@ exports.generate = async (req, res) => {
                         charLength || '1200-1800'
                     );
 
-                    // Save to database
+                    // Save first post content for image generation
+                    if (!firstPostContent) {
+                        firstPostContent = content;
+                    }
+
+                    // Save to database (image will be updated later)
                     const post = await StandalonePost.create({
                         generationId,
                         userQuery: query,
@@ -188,8 +177,8 @@ exports.generate = async (req, res) => {
                         personaName,
                         content,
                         charLengthSetting: charLength || '1200-1800',
-                        imageUrl,
-                        imagePrompt,
+                        imageUrl: null,
+                        imagePrompt: null,
                         createdBy: req.user?._id || null
                     });
 
@@ -203,6 +192,43 @@ exports.generate = async (req, res) => {
                         message: `Failed to generate post for ${platform.name} + ${personaName}: ${postError.message}`
                     });
                 }
+            }
+        }
+
+        // Generate image based on first post content
+        let imageUrl = null;
+        let imagePrompt = null;
+
+        if (firstPostContent) {
+            emit('postGenerationProgress', {
+                step: 'image',
+                status: 'start',
+                message: 'Generating AI image...'
+            });
+
+            const imageResult = await postService.generatePostImage(firstPostContent, (status) => {
+                emit('postImageProgress', status);
+            });
+            imageUrl = imageResult.imageUrl;
+            imagePrompt = imageResult.imagePrompt;
+
+            emit('postGenerationProgress', {
+                step: 'image',
+                status: 'complete',
+                message: imageUrl ? 'Image generated successfully' : 'Image generation skipped'
+            });
+
+            // Update all posts with image URL
+            if (imageUrl) {
+                await StandalonePost.updateMany(
+                    { generationId },
+                    { imageUrl, imagePrompt }
+                );
+                // Update local array too
+                generatedPosts.forEach(post => {
+                    post.imageUrl = imageUrl;
+                    post.imagePrompt = imagePrompt;
+                });
             }
         }
 

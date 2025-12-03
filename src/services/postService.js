@@ -166,9 +166,10 @@ async function searchForPostContent(userQuery, statusCallback = null) {
 }
 
 /**
- * Generate an AI image using Gemini 2.5 Flash
+ * Generate an AI image using Imagen 4.0 Ultra
+ * Takes the generated post content and creates a themed image
  */
-async function generatePostImage(topic, statusCallback = null) {
+async function generatePostImage(postContent, statusCallback = null) {
     const logStep = (step, status, message) => {
         if (statusCallback) statusCallback({ step, status, message });
         console.log(`[Post Image] ${step}: ${message}`);
@@ -181,11 +182,32 @@ async function generatePostImage(topic, statusCallback = null) {
     }
 
     try {
+        // Use Haiku to analyze post and create image description
+        logStep('image', 'analyzing', 'Analyzing post theme...');
+
+        const anthropic = getClaudeClient();
+        const themeResponse = await withRetry(() => anthropic.messages.create({
+            model: 'claude-haiku-4-5',
+            max_tokens: 300,
+            messages: [{
+                role: 'user',
+                content: `Analyze this social media post and provide a brief visual theme description for an image generator.
+
+Post content:
+${sanitizeUnicode(postContent).substring(0, 1500)}
+
+Identify the core theme (e.g., coding, productivity, AI, teamwork, innovation, data, security, etc.) and describe a simple visual scene that represents it. Be specific and concrete - describe objects, shapes, or scenes, not abstract concepts.
+
+Return ONLY a 1-2 sentence visual description, nothing else. Example: "A laptop with code editor open, surrounded by floating geometric shapes and connection lines."`
+            }]
+        }));
+
+        const themeDescription = themeResponse.content[0].text.trim();
         logStep('image', 'generating', 'Generating image with Imagen 4.0 Ultra...');
 
         const ai = new GoogleGenAI({ apiKey });
 
-        const imagePrompt = `Create a professional social media header image for a post about: "${sanitizeUnicode(topic)}".
+        const imagePrompt = `Create a professional social media header image: ${sanitizeUnicode(themeDescription)}
 
 Style: Modern, clean design. ZERO titles, headlines, sentences, or words.
 Color palette: soft sky blue, muted sage green, warm golden yellow, and medium purple. Dark blue-gray background.`;

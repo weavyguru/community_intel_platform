@@ -18,10 +18,29 @@ async function main() {
     console.log('Initializing Google GenAI...');
     const ai = new GoogleGenAI({ apiKey });
 
-    const prompt = `Create a professional social media header image about developer tools and AI coding assistants.
+    // Simulating the full flow: post content -> Haiku theme extraction -> image prompt
+    const samplePostContent = `🚀 Why I switched from Lovable to Cursor for AI-assisted coding
+
+After 3 months of using Lovable, I made the jump to Cursor. Here's why:
+
+1. Better context understanding - Cursor actually gets my codebase
+2. Faster iterations - No more waiting for generations
+3. Real IDE integration - It's VS Code, but smarter
+
+The AI coding space is evolving fast. What tools are you using? 💻
+
+#AITools #DevProductivity #Cursor`;
+
+    // This is what Haiku would generate from the post:
+    const themeDescription = "A developer workspace with code editor on screen, showing syntax-highlighted code. Floating UI elements and connection lines suggest AI assistance.";
+
+    const prompt = `Create a professional social media header image: ${themeDescription}
 
 Style: Modern, clean design. ZERO titles, headlines, sentences, or words.
 Color palette: soft sky blue, muted sage green, warm golden yellow, and medium purple. Dark blue-gray background.`;
+
+    console.log('Sample post content:', samplePostContent.substring(0, 100) + '...');
+    console.log('Theme extracted:', themeDescription);
 
     console.log('Generating image with prompt:', prompt);
     console.log('Using model: models/imagen-4.0-ultra-generate-001');
