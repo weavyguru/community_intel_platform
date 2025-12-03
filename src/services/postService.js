@@ -360,6 +360,7 @@ Requirements:
 - The post should be engaging and encourage interaction
 - Include relevant emojis where appropriate for the platform
 - Do NOT include placeholder hashtags like #YourCompany - only include real, relevant hashtags
+- Do NOT include any URLs or links in the post content
 - Make the post complete and ready to publish
 
 Return your response as valid JSON only (no markdown, no code blocks):
