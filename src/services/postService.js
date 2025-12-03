@@ -1,5 +1,5 @@
 const { getClaudeClient } = require('../config/claude');
-const { getOpenAIClient } = require('../config/openai');
+const { GoogleGenAI } = require('@google/genai');
 const claudeService = require('./claudeService');
 const chromaService = require('./chromaService');
 const Persona = require('../models/Persona');
@@ -166,7 +166,7 @@ async function searchForPostContent(userQuery, statusCallback = null) {
 }
 
 /**
- * Generate an AI image using DALL-E
+ * Generate an AI image using Gemini 2.5 Flash
  */
 async function generatePostImage(topic, statusCallback = null) {
     const logStep = (step, status, message) => {
@@ -174,53 +174,51 @@ async function generatePostImage(topic, statusCallback = null) {
         console.log(`[Post Image] ${step}: ${message}`);
     };
 
-    const openai = getOpenAIClient();
-    if (!openai) {
-        logStep('image', 'skipped', 'OpenAI not configured - skipping image generation');
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+        logStep('image', 'skipped', 'Google API key not configured - skipping image generation');
         return { imageUrl: null, imagePrompt: null };
     }
 
     try {
-        logStep('image', 'prompt', 'Creating image prompt with Claude...');
+        logStep('image', 'generating', 'Generating image with Imagen 4.0 Ultra...');
 
-        const anthropic = getClaudeClient();
-        const promptResponse = await withRetry(() => anthropic.messages.create({
-            model: 'claude-haiku-4-5',
-            max_tokens: 500,
-            messages: [{
-                role: 'user',
-                content: `Create a DALL-E image prompt for a social media post about: "${sanitizeUnicode(topic)}".
+        const ai = new GoogleGenAI({ apiKey });
 
-Requirements:
-- Professional, modern, and visually engaging
-- Suitable for LinkedIn, Twitter, and other social platforms
-- Abstract or conceptual (avoid text in the image)
-- Bright, appealing colors
-- Should work as a header/banner image
+        const imagePrompt = `Create a professional social media header image for a post about: "${sanitizeUnicode(topic)}".
 
-Return ONLY the image prompt text, nothing else.`
-            }]
-        }));
+Style: Modern, clean design. ZERO titles, headlines, sentences, or words.
+Color palette: soft sky blue, muted sage green, warm golden yellow, and medium purple. Dark blue-gray background.`;
 
-        const imagePrompt = promptResponse.content[0].text.trim();
-        logStep('image', 'generating', `Generating image with DALL-E 3: "${imagePrompt.substring(0, 50)}..."`);
-
-        const image = await openai.images.generate({
-            model: "dall-e-3",
+        const response = await ai.models.generateImages({
+            model: "imagen-4.0-ultra-generate-001",
             prompt: imagePrompt,
-            n: 1,
-            size: "1792x1024",
-            quality: "standard"
+            config: {
+                aspectRatio: "16:9",
+                numberOfImages: 1,
+            }
         });
 
-        const dalleUrl = image.data[0].url;
+        // Extract image from response
+        if (!response.generatedImages || response.generatedImages.length === 0) {
+            throw new Error('No image in Imagen response');
+        }
 
-        // Download and save locally
+        const image = response.generatedImages[0];
+        const imageData = image.image?.imageBytes;
+
+        if (!imageData) {
+            throw new Error('No image bytes in Imagen response');
+        }
+
+        // Save base64 image locally
         logStep('image', 'saving', 'Saving image locally...');
-        const imageUrl = await saveImageLocally(dalleUrl);
+        const imageUrl = await saveBase64ImageLocally(
+            imageData,
+            image.mimeType || 'image/png'
+        );
 
         logStep('image', 'complete', 'Image generated successfully');
-
         return { imageUrl, imagePrompt };
 
     } catch (error) {
@@ -228,6 +226,23 @@ Return ONLY the image prompt text, nothing else.`
         console.error('[Post Image] Error:', error);
         return { imageUrl: null, imagePrompt: null };
     }
+}
+
+/**
+ * Save base64 image data locally
+ */
+async function saveBase64ImageLocally(base64Data, mimeType) {
+    const outputDir = path.join(__dirname, '..', '..', 'public', 'uploads', 'post-images');
+    await fs.mkdir(outputDir, { recursive: true });
+
+    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+    const filename = `post-${Date.now()}.${ext}`;
+    const outputPath = path.join(outputDir, filename);
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    await fs.writeFile(outputPath, buffer);
+
+    return `/uploads/post-images/${filename}`;
 }
 
 /**
