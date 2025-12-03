@@ -302,7 +302,7 @@ function createPostCard(post) {
 
     div.innerHTML = `
         <div class="flex gap-4">
-            ${post.imageUrl ? `<img src="${post.imageUrl}" class="post-thumbnail flex-shrink-0" alt="Post image" />` : ''}
+            ${post.imageUrl ? `<a href="${post.imageUrl}" target="_blank" rel="noopener noreferrer"><img src="${post.imageUrl}" class="post-thumbnail flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity" alt="Post image" /></a>` : ''}
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-2">
                     <span class="badge badge-platform">${escapeHtml(post.platformName)}</span>
@@ -913,7 +913,7 @@ function displayViewGenerationPosts(posts) {
     container.innerHTML = posts.map(post => `
         <div class="post-item" data-platform="${escapeHtml(post.platformName)}" data-persona="${escapeHtml(post.personaName)}" data-content="${escapeHtml(post.content).replace(/"/g, '&quot;')}">
             <div class="flex gap-3">
-                ${post.imageUrl ? `<img src="${post.imageUrl}" class="post-thumbnail flex-shrink-0" alt="Post image" />` : ''}
+                ${post.imageUrl ? `<a href="${post.imageUrl}" target="_blank" rel="noopener noreferrer"><img src="${post.imageUrl}" class="post-thumbnail flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity" alt="Post image" /></a>` : ''}
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="badge badge-platform">${escapeHtml(post.platformName)}</span>
