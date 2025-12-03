@@ -161,9 +161,7 @@ exports.createTaskFromPost = async (req, res) => {
 
         // Build task content
         const taskTitle = `${platformName} post (${post.personaName})`;
-        const taskSnippet = platformUrl
-            ? `${post.content}\n\n🔗 ${platformUrl}`
-            : post.content;
+        const taskSnippet = post.content;
 
         // Create task with HIGH priority (no delegation - that happens in task view)
         const task = await Task.create({
