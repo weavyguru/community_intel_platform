@@ -544,7 +544,7 @@ Respond ONLY with valid JSON:
         ? availablePlatforms.join(', ')
         : 'all platforms';
 
-      const systemPrompt = `You are an expert search strategist using Claude Sonnet 4.5. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
+      const systemPrompt = `You are an expert search strategist. Analyze the user's question and generate a comprehensive, multi-layered search strategy.
 
 Available platforms: ${platformsList}
 
@@ -596,7 +596,7 @@ Analyze the question's:
 Respond with ONLY the JSON object.`;
 
       const response = await client.messages.create({
-        model: this.model, // Use Sonnet 4.5
+        model: 'claude-haiku-4-5', // Use Haiku 4.5 for blog search
         max_tokens: 2000,
         system: systemPrompt,
         messages: [{
@@ -606,7 +606,7 @@ Respond with ONLY the JSON object.`;
       });
 
       const jsonText = response.content[0].text.trim();
-      console.log('Raw Sonnet search strategy response:', jsonText);
+      console.log('Raw Haiku search strategy response:', jsonText);
 
       // Remove markdown code blocks if present
       const cleanJson = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

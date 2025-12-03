@@ -171,11 +171,75 @@ class EmailService {
       const taskCompleteUrl = `${baseUrl}/tasks?taskId=${task._id}&done=true`;
       const taskViewUrl = `${baseUrl}/tasks?taskId=${task._id}`;
 
-      const msg = {
-        to: delegatedUser.email,
-        from: getFromEmail(),
-        subject: `Task Delegated: ${task.title}`,
-        html: `
+      // Check if this is a post task (needs different email content)
+      const isPostTask = task.taskType === 'post';
+      const platformName = task.metadata?.originalPlatform || task.platform || 'social media';
+
+      // For post tasks, use blogLinkContent if available, otherwise use snippet
+      const postContent = isPostTask
+        ? (task.metadata?.blogLinkContent || task.snippet)
+        : task.snippet;
+
+      // Ensure image URL is absolute (for emails)
+      let imageUrl = task.metadata?.imageUrl;
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        imageUrl = `${baseUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+      }
+
+      let emailHtml;
+
+      if (isPostTask) {
+        // Post creation email
+        emailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1E40AF;">📝 Post to Create</h2>
+            <p>Hi ${delegatedUser.name},</p>
+            <p>You've been tasked to create a post on <strong>${platformName}</strong>.</p>
+
+            <div style="background-color: #EFF6FF; border: 2px solid #3B82F6; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <p style="color: #1E40AF; font-size: 12px; margin: 0 0 10px 0; font-weight: bold;">POST CONTENT:</p>
+              <p style="color: #374151; margin: 0; white-space: pre-wrap; line-height: 1.6;">${postContent}</p>
+            </div>
+
+            ${imageUrl ? `
+              <div style="margin: 20px 0;">
+                <p style="color: #374151; font-size: 14px; font-weight: bold; margin-bottom: 10px;">📷 Attached Image:</p>
+                <img src="${imageUrl}" alt="Post image" style="max-width: 100%; border-radius: 8px; border: 1px solid #E5E7EB;" />
+              </div>
+            ` : ''}
+
+            <div style="margin: 30px 0; background-color: #F9FAFB; border-radius: 8px; padding: 20px;">
+              <h3 style="margin: 0 0 15px 0; color: #374151;">What to do:</h3>
+              <ol style="color: #4B5563; margin: 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;">Copy the post content above</li>
+                <li style="margin-bottom: 8px;">Go to <strong>${platformName}</strong> and create a new post</li>
+                <li style="margin-bottom: 8px;">Paste the content${imageUrl ? ' and add the image' : ''}</li>
+                <li style="margin-bottom: 8px;">Click "Done it!" when published</li>
+              </ol>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              ${task.sourceUrl && task.sourceUrl !== '#' ? `
+                <a href="${task.sourceUrl}" target="_blank" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 0 10px 10px 0;">
+                  Open ${platformName} →
+                </a>
+              ` : ''}
+              <a href="${taskCompleteUrl}" style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 0 0 10px 0;">
+                ✓ Done it!
+              </a>
+            </div>
+
+            <p style="color: #6B7280; font-size: 12px; text-align: center;">
+              Or <a href="${taskViewUrl}" style="color: #4F46E5;">view the task details</a> in the platform
+            </p>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
+            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+          </div>
+        `;
+      } else {
+        // Original response task email
+        emailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>You've Been Tasked!</h2>
             <p>Hi ${delegatedUser.name},</p>
@@ -183,7 +247,7 @@ class EmailService {
 
             <div style="background-color: #F3F4F6; border-left: 4px solid #4F46E5; padding: 15px; margin: 20px 0;">
               <h3 style="margin: 0 0 10px 0;">${task.title}</h3>
-              <p style="color: #6B7280; margin: 5px 0;">${task.snippet}</p>
+              <p style="color: #6B7280; margin: 5px 0; white-space: pre-wrap;">${task.snippet}</p>
               ${task.metadata?.author ? `<p style="color: #6B7280; font-size: 12px; margin-top: 10px;">Author: ${task.metadata.author}</p>` : ''}
             </div>
 
@@ -232,7 +296,14 @@ class EmailService {
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
             <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
           </div>
-        `
+        `;
+      }
+
+      const msg = {
+        to: delegatedUser.email,
+        from: getFromEmail(),
+        subject: isPostTask ? `Post to Create: ${task.title}` : `Task Delegated: ${task.title}`,
+        html: emailHtml
       };
 
       await sgMail.send(msg);

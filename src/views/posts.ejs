@@ -1,0 +1,378 @@
+<style>
+  .platform-checkbox, .persona-checkbox {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .platform-checkbox:hover, .persona-checkbox:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+  }
+  .platform-checkbox.selected, .persona-checkbox.selected {
+    background: #eef2ff;
+    border-color: #667eea;
+  }
+  .post-item {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1rem 0;
+    transition: all 0.2s;
+  }
+  .post-item:last-child {
+    border-bottom: none;
+  }
+  .post-item:hover {
+    background: #f9fafb;
+  }
+  .post-content {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-size: 0.9rem;
+    color: #374151;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  .post-thumbnail {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+  }
+  .badge-platform {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  .badge-persona {
+    background: #dcfce7;
+    color: #166534;
+  }
+  .generated-image {
+    max-width: 100%;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  .generation-group {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+</style>
+
+<div class="space-y-8">
+  <!-- Header -->
+  <div class="flex justify-between items-start">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">Post Creator</h1>
+      <p class="mt-2 text-gray-600">Create social media posts from community insights</p>
+    </div>
+  </div>
+
+  <!-- Step 1: Configure & Generate -->
+  <div id="step1" class="bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Create Social Media Posts</h2>
+      <p class="text-gray-600">Search community data and generate posts for multiple platforms</p>
+    </div>
+
+    <div class="space-y-6">
+      <!-- Query Input -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          What topics should the posts cover?
+        </label>
+        <sl-textarea
+          id="postQuery"
+          placeholder="Example: Create posts about what Lovable users are struggling with the most"
+          rows="3"
+          resize="auto"
+          class="w-full"
+        ></sl-textarea>
+        <p class="mt-2 text-sm text-gray-500">
+          Claude will search the last 90 days of community data to find relevant insights
+        </p>
+      </div>
+
+      <!-- Platform Selection -->
+      <div>
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+          Select Platforms
+          <sl-icon-button id="managePlatformsBtn" name="gear" label="Manage Platforms" style="font-size: 1rem;"></sl-icon-button>
+        </label>
+        <div id="platformCheckboxes" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <% platforms.forEach(platform => { %>
+            <label class="platform-checkbox" data-platform-id="<%= platform._id %>">
+              <sl-checkbox value="<%= platform._id %>"></sl-checkbox>
+              <span class="ml-2"><%= platform.name %></span>
+            </label>
+          <% }); %>
+        </div>
+        <% if (platforms.length === 0) { %>
+          <p class="text-gray-500 text-sm mt-2">No platforms configured. Click the gear icon to add platforms.</p>
+        <% } %>
+      </div>
+
+      <!-- Persona Selection -->
+      <div>
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700 mb-3">
+          Select Personas
+          <sl-icon-button id="managePersonasBtn" name="gear" label="Manage Personas" style="font-size: 1rem;"></sl-icon-button>
+        </label>
+        <div id="personaCheckboxes" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <% personas.forEach(persona => { %>
+            <label class="persona-checkbox" data-persona-id="<%= persona._id %>">
+              <sl-checkbox value="<%= persona._id %>"></sl-checkbox>
+              <span class="ml-2"><%= persona.name %></span>
+            </label>
+          <% }); %>
+        </div>
+        <% if (personas.length === 0) { %>
+          <p class="text-gray-500 text-sm mt-2">No personas configured. Click the gear icon to add personas.</p>
+        <% } %>
+      </div>
+
+      <!-- Character Length -->
+      <div class="max-w-xs">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Character Length</label>
+        <sl-select id="charLengthSelect" value="1200-1800" hoist>
+          <sl-option value="1200-1800">1200-1800 (Long)</sl-option>
+          <sl-option value="600-1200">600-1200 (Medium)</sl-option>
+          <sl-option value="200-600">200-600 (Short)</sl-option>
+        </sl-select>
+      </div>
+
+      <!-- Generate Button -->
+      <div>
+        <sl-button id="generatePostsBtn" variant="primary" size="large">
+          <sl-icon slot="prefix" name="magic"></sl-icon>
+          Generate Posts
+        </sl-button>
+      </div>
+
+      <!-- Status Display -->
+      <div id="generationStatus" class="hidden">
+        <sl-card class="bg-blue-50">
+          <div class="flex items-start gap-3">
+            <sl-spinner class="text-2xl"></sl-spinner>
+            <div class="flex-1">
+              <p id="statusMessage" class="text-sm font-medium text-gray-900">Initializing...</p>
+              <sl-progress-bar id="statusProgress" class="mt-2" indeterminate></sl-progress-bar>
+              <div id="statusLog" class="mt-3 space-y-1 text-xs text-gray-600 max-h-48 overflow-y-auto"></div>
+            </div>
+          </div>
+        </sl-card>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Generated Posts -->
+  <div id="step2" class="hidden bg-white rounded-lg shadow-lg p-8">
+    <div class="flex justify-between items-start mb-6">
+      <div class="flex items-start gap-4">
+        <!-- Thumbnail Image -->
+        <div id="generatedImageContainer" class="hidden">
+          <img id="generatedImage" class="post-thumbnail" src="" alt="Generated image" />
+        </div>
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Generated Posts</h2>
+          <p class="text-gray-600">Review, copy, and create tasks from your posts</p>
+        </div>
+      </div>
+      <sl-button id="createMoreBtn" variant="default">
+        <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+        Create More
+      </sl-button>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-4 p-4 bg-gray-100 rounded-lg mb-6">
+      <span class="text-sm font-medium text-gray-700">Filter:</span>
+      <sl-select id="filterPlatform" placeholder="All Platforms" clearable size="small" style="min-width: 150px;">
+        <sl-option value="">All Platforms</sl-option>
+      </sl-select>
+      <sl-select id="filterPersona" placeholder="All Personas" clearable size="small" style="min-width: 150px;">
+        <sl-option value="">All Personas</sl-option>
+      </sl-select>
+      <span id="postsCount" class="text-sm text-gray-500 ml-auto"></span>
+    </div>
+
+    <!-- Posts List -->
+    <div id="postsContainer" class="divide-y divide-gray-200">
+      <!-- Posts will be inserted here -->
+    </div>
+  </div>
+
+  <!-- Previous Posts -->
+  <div id="previousPostsSection" class="bg-white rounded-lg shadow-lg p-8">
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-2">Previous Generations</h2>
+      <p class="text-gray-600">View and manage your previously generated posts</p>
+    </div>
+
+    <div id="previousPostsContainer" class="space-y-4">
+      <p class="text-gray-500 text-center py-8">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Platform Manager Modal -->
+<sl-dialog id="platformModal" label="Manage Social Platforms" style="--width: 60vw; --header-spacing: 1rem;">
+  <div class="space-y-4">
+    <sl-alert variant="primary" open>
+      <sl-icon slot="icon" name="info-circle"></sl-icon>
+      <strong>Social Platforms</strong><br>
+      Define platforms with specific instructions for how posts should be formatted and styled.
+    </sl-alert>
+
+    <!-- Existing Platforms List -->
+    <div>
+      <h3 class="text-sm font-medium text-gray-700 mb-2">Existing Platforms</h3>
+      <div id="platformsList" class="space-y-2">
+        <p class="text-gray-500 text-sm">Loading platforms...</p>
+      </div>
+    </div>
+
+    <!-- Add New Platform Form -->
+    <sl-details summary="Add New Platform" id="addPlatformDetails">
+      <div class="space-y-3 p-4 bg-gray-50 rounded mt-2">
+        <sl-input id="newPlatformName" label="Platform Name" placeholder="e.g., LinkedIn, Twitter, Facebook"></sl-input>
+        <sl-textarea id="newPlatformInstructions" label="Platform Instructions" rows="6"
+          help-text="How should posts be formatted for this platform?"
+          placeholder="e.g., Professional tone, use hashtags sparingly, focus on industry insights..."></sl-textarea>
+        <sl-input id="newPlatformUrl" label="Platform URL" placeholder="e.g., https://linkedin.com/company/weavy"
+          help-text="URL to the platform/channel for task delegation links"></sl-input>
+        <sl-button id="createPlatformBtn" variant="primary">
+          <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+          Create Platform
+        </sl-button>
+      </div>
+    </sl-details>
+  </div>
+
+  <div slot="footer">
+    <sl-button id="closePlatformModalBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Edit Platform Modal -->
+<sl-dialog id="editPlatformModal" label="Edit Platform" style="--width: 50vw;">
+  <div class="space-y-3">
+    <sl-input id="editPlatformName" label="Platform Name"></sl-input>
+    <sl-textarea id="editPlatformInstructions" label="Platform Instructions" rows="6"></sl-textarea>
+    <sl-input id="editPlatformUrl" label="Platform URL" placeholder="e.g., https://linkedin.com/company/weavy"></sl-input>
+  </div>
+  <div slot="footer" class="flex justify-between">
+    <sl-button id="updatePlatformBtn" variant="primary">
+      <sl-icon slot="prefix" name="save"></sl-icon>
+      Save Changes
+    </sl-button>
+    <sl-button id="closeEditPlatformBtn" variant="default">Cancel</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Persona Manager Modal -->
+<sl-dialog id="personaModal" label="Manage Writing Personas" style="--width: 60vw; --header-spacing: 1rem;">
+  <div class="space-y-4">
+    <sl-alert variant="primary" open>
+      <sl-icon slot="icon" name="info-circle"></sl-icon>
+      <strong>Writing Personas</strong><br>
+      Personas define the voice and style for post writing. Select personas when generating posts to customize the tone.
+    </sl-alert>
+
+    <!-- Existing Personas List -->
+    <div>
+      <h3 class="text-sm font-medium text-gray-700 mb-2">Existing Personas</h3>
+      <div id="personasList" class="space-y-2">
+        <p class="text-gray-500 text-sm">Loading personas...</p>
+      </div>
+    </div>
+
+    <!-- Add New Persona Form -->
+    <sl-details summary="Add New Persona" id="addPersonaDetails">
+      <div class="space-y-3 p-4 bg-gray-50 rounded mt-2">
+        <sl-input id="newPersonaName" label="Persona Name" placeholder="e.g., CEO of Weavy, Technical Expert"></sl-input>
+        <sl-textarea id="newPersonaDescription" label="Description" rows="2"
+          placeholder="Brief description of this persona's role or perspective"></sl-textarea>
+        <sl-textarea id="newPersonaPostModifier" label="Writing Style Instructions" rows="6"
+          help-text="How should posts be written when using this persona?"
+          placeholder="e.g., Write in a conversational, authoritative tone. Use personal anecdotes and industry insights..."></sl-textarea>
+        <sl-button id="createPersonaBtn" variant="primary">
+          <sl-icon slot="prefix" name="plus-circle"></sl-icon>
+          Create Persona
+        </sl-button>
+      </div>
+    </sl-details>
+  </div>
+
+  <div slot="footer">
+    <sl-button id="closePersonaModalBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- Edit Persona Modal -->
+<sl-dialog id="editPersonaModal" label="Edit Persona" style="--width: 50vw;">
+  <div class="space-y-3">
+    <sl-input id="editPersonaName" label="Persona Name"></sl-input>
+    <sl-textarea id="editPersonaDescription" label="Description" rows="2"></sl-textarea>
+    <sl-textarea id="editPersonaPostModifier" label="Writing Style Instructions" rows="6"></sl-textarea>
+  </div>
+  <div slot="footer" class="flex justify-between">
+    <sl-button id="updatePersonaBtn" variant="primary">
+      <sl-icon slot="prefix" name="save"></sl-icon>
+      Save Changes
+    </sl-button>
+    <sl-button id="closeEditPersonaBtn" variant="default">Cancel</sl-button>
+  </div>
+</sl-dialog>
+
+<!-- View Generation Modal -->
+<sl-dialog id="viewGenerationModal" label="Generation Details" style="--width: 80vw; --header-spacing: 1rem;">
+  <div class="space-y-6">
+    <!-- Image -->
+    <div id="viewGenerationImage" class="hidden">
+      <img class="generated-image max-w-xl mx-auto" src="" alt="Generated image" />
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-4 p-3 bg-gray-100 rounded">
+      <span class="text-sm font-medium text-gray-700">Filter:</span>
+      <sl-select id="viewFilterPlatform" placeholder="All Platforms" clearable size="small" style="min-width: 150px;">
+        <sl-option value="">All Platforms</sl-option>
+      </sl-select>
+      <sl-select id="viewFilterPersona" placeholder="All Personas" clearable size="small" style="min-width: 150px;">
+        <sl-option value="">All Personas</sl-option>
+      </sl-select>
+    </div>
+
+    <!-- Posts -->
+    <div id="viewGenerationPosts" class="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+    </div>
+  </div>
+
+  <div slot="footer" class="flex justify-between">
+    <sl-button id="deleteGenerationBtn" variant="danger" outline>
+      <sl-icon slot="prefix" name="trash"></sl-icon>
+      Delete All
+    </sl-button>
+    <sl-button id="closeViewGenerationBtn" variant="default">Close</sl-button>
+  </div>
+</sl-dialog>
+
+<script src="/js/posts.js"></script>

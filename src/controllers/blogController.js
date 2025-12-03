@@ -2,6 +2,7 @@ const blogService = require('../services/blogService');
 const hubspotService = require('../services/hubspotService');
 const BlogTopic = require('../models/BlogTopic');
 const BlogPost = require('../models/BlogPost');
+const SocialPost = require('../models/SocialPost');
 
 /**
  * Start the blog creation process
@@ -411,13 +412,33 @@ exports.getAllBlogPosts = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(parseInt(limit))
             .skip(parseInt(skip))
-            .select('title subtitle status publishedToHubSpot publishedAt hubSpotUrl selectedCoverImage createdAt');
+            .select('title subtitle status publishedToHubSpot publishedAt hubSpotUrl selectedCoverImage createdAt')
+            .lean();
+
+        // Get social post counts for each blog post
+        const blogPostIds = blogPosts.map(p => p._id);
+        const socialPostCounts = await SocialPost.aggregate([
+            { $match: { blogPostId: { $in: blogPostIds } } },
+            { $group: { _id: '$blogPostId', count: { $sum: 1 } } }
+        ]);
+
+        // Create a map for easy lookup
+        const countMap = new Map();
+        socialPostCounts.forEach(item => {
+            countMap.set(item._id.toString(), item.count);
+        });
+
+        // Add social post count to each blog post
+        const postsWithCounts = blogPosts.map(post => ({
+            ...post,
+            socialPostCount: countMap.get(post._id.toString()) || 0
+        }));
 
         const total = await BlogPost.countDocuments(query);
 
         return res.json({
             success: true,
-            posts: blogPosts,
+            posts: postsWithCounts,
             total,
             limit: parseInt(limit),
             skip: parseInt(skip)

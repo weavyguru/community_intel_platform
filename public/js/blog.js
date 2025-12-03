@@ -6,6 +6,9 @@ let selectedTopicIndices = [];
 let quillEditor = null;
 let selectedPersonaId = null;
 let editingPersonaId = null;
+let currentSocialBlogPostId = null;
+let editingPlatformId = null;
+let allSocialPosts = []; // Store all social posts for filtering
 
 // Socket.IO connection for real-time updates
 const socket = io();
@@ -15,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeEventListeners();
     loadPublishedBlogs();
     loadPersonas();
+    loadSocialPlatforms();
 });
 
 function initializeEventListeners() {
@@ -59,6 +63,24 @@ function initializeEventListeners() {
     document.getElementById('updatePersonaBtn').addEventListener('click', updatePersona);
     document.getElementById('closeEditPersonaBtn').addEventListener('click', () => {
         document.getElementById('editPersonaModal').hide();
+    });
+
+    // Social posts modal
+    document.getElementById('closeSocialPostsModalBtn').addEventListener('click', () => {
+        document.getElementById('socialPostsModal').hide();
+    });
+    document.getElementById('generateSocialPostsBtn').addEventListener('click', generateSocialPosts);
+    document.getElementById('socialPostsFilter').addEventListener('sl-change', filterSocialPosts);
+
+    // Platform management
+    document.getElementById('managePlatformsBtn').addEventListener('click', openPlatformManager);
+    document.getElementById('createPlatformBtn').addEventListener('click', createPlatform);
+    document.getElementById('closePlatformModalBtn').addEventListener('click', () => {
+        document.getElementById('platformModal').hide();
+    });
+    document.getElementById('updatePlatformBtn').addEventListener('click', updatePlatform);
+    document.getElementById('closeEditPlatformBtn').addEventListener('click', () => {
+        document.getElementById('editPlatformModal').hide();
     });
 
     // Socket.IO listeners
@@ -428,6 +450,11 @@ function createPublishedPostRow(post) {
         ? post.selectedCoverImage.url
         : '/uploads/blog-images/placeholder.png';
 
+    // Determine social posts icon based on whether blog has social posts
+    const hasSocialPosts = post.socialPostCount && post.socialPostCount > 0;
+    const socialIcon = hasSocialPosts ? 'chat-square-text-fill' : 'plus-circle';
+    const socialTooltip = hasSocialPosts ? `${post.socialPostCount} social posts` : 'Generate social posts';
+
     row.innerHTML = `
         <img src="${coverImage}" alt="${post.title}" class="w-24 h-24 object-cover rounded" />
         <div class="flex-1">
@@ -444,12 +471,18 @@ function createPublishedPostRow(post) {
                 ${post.hubSpotUrl ? `<a href="${post.hubSpotUrl}" target="_blank" class="text-xs text-blue-600 hover:underline">View on HubSpot →</a>` : ''}
             </div>
         </div>
+        <sl-tooltip content="${socialTooltip}">
+            <sl-button variant="default" size="small" class="social-posts-btn" data-post-id="${post._id}">
+                <sl-icon name="${socialIcon}"></sl-icon>
+            </sl-button>
+        </sl-tooltip>
         <sl-button variant="primary" size="small" class="edit-post-btn" data-post-id="${post._id}">
             <sl-icon name="pencil"></sl-icon>
         </sl-button>
     `;
 
     row.querySelector('.edit-post-btn').addEventListener('click', () => openPostEditor(post._id));
+    row.querySelector('.social-posts-btn').addEventListener('click', () => openSocialPostsModal(post._id));
 
     return row;
 }
@@ -949,16 +982,24 @@ async function loadPersonasList() {
                 </div>
                 ${!persona.isDefault ? `
                     <div class="flex gap-2 ml-4">
-                        <sl-button size="small" variant="default" onclick="editPersona('${persona._id}')">
+                        <sl-button size="small" variant="default" class="edit-persona-btn" data-persona-id="${persona._id}">
                             <sl-icon name="pencil"></sl-icon>
                         </sl-button>
-                        <sl-button size="small" variant="danger" outline onclick="deletePersona('${persona._id}')">
+                        <sl-button size="small" variant="danger" outline class="delete-persona-btn" data-persona-id="${persona._id}">
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </div>
                 ` : ''}
             </div>
         `).join('');
+
+        // Attach event listeners for edit/delete buttons
+        container.querySelectorAll('.edit-persona-btn').forEach(btn => {
+            btn.addEventListener('click', () => editPersona(btn.dataset.personaId));
+        });
+        container.querySelectorAll('.delete-persona-btn').forEach(btn => {
+            btn.addEventListener('click', () => deletePersona(btn.dataset.personaId));
+        });
     } catch (error) {
         console.error('Error loading personas list:', error);
         document.getElementById('personasList').innerHTML =
@@ -1113,4 +1154,518 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================
+// Social Posts Management Functions
+// ============================================
+
+// Load social platforms into dropdowns
+async function loadSocialPlatforms() {
+    try {
+        const response = await fetch('/api/blog/social-platforms');
+        const data = await response.json();
+
+        if (data.success) {
+            const select = document.getElementById('socialPlatformSelect');
+            select.innerHTML = '';
+
+            if (data.platforms.length === 0) {
+                const option = document.createElement('sl-option');
+                option.value = '';
+                option.textContent = 'No platforms - Create one first';
+                option.disabled = true;
+                select.appendChild(option);
+            } else {
+                data.platforms.forEach(platform => {
+                    const option = document.createElement('sl-option');
+                    option.value = platform._id;
+                    option.textContent = platform.name;
+                    select.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading social platforms:', error);
+    }
+}
+
+// Load personas into social posts modal dropdown
+async function loadSocialPersonas() {
+    try {
+        const response = await fetch('/api/blog/personas');
+        const data = await response.json();
+
+        if (data.success) {
+            const select = document.getElementById('socialPersonaSelect');
+            select.innerHTML = '<sl-option value="">Neutral (Default)</sl-option>';
+
+            data.personas.forEach(persona => {
+                if (!persona.isDefault) {
+                    const option = document.createElement('sl-option');
+                    option.value = persona._id;
+                    option.textContent = persona.name;
+                    select.appendChild(option);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading personas for social modal:', error);
+    }
+}
+
+// Open social posts modal
+async function openSocialPostsModal(blogPostId) {
+    currentSocialBlogPostId = blogPostId;
+
+    // Reset modal state
+    document.getElementById('socialPostsContainer').innerHTML = '';
+    document.getElementById('socialGenerationStatus').classList.add('hidden');
+    document.getElementById('socialPlatformSelect').value = '';
+    document.getElementById('socialPersonaSelect').value = '';
+    document.getElementById('socialPostsFilter').value = '';
+    document.getElementById('socialPostsFilterContainer').classList.add('hidden');
+    allSocialPosts = [];
+
+    // Load platforms and personas
+    await loadSocialPlatforms();
+    await loadSocialPersonas();
+
+    // Load existing social posts for this blog
+    await loadExistingSocialPosts(blogPostId);
+
+    // Show modal
+    document.getElementById('socialPostsModal').show();
+}
+
+// Load existing social posts for a blog
+async function loadExistingSocialPosts(blogPostId) {
+    try {
+        const response = await fetch(`/api/blog/posts/${blogPostId}/social-posts`);
+        const data = await response.json();
+
+        if (data.success && data.posts.length > 0) {
+            allSocialPosts = data.posts;
+            populateSocialPostsFilter(data.posts);
+            displaySocialPosts(data.posts);
+            document.getElementById('socialPostsFilterContainer').classList.remove('hidden');
+        } else {
+            allSocialPosts = [];
+            document.getElementById('socialPostsFilterContainer').classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error loading existing social posts:', error);
+    }
+}
+
+// Populate the platform filter dropdown based on existing posts
+function populateSocialPostsFilter(posts) {
+    const filter = document.getElementById('socialPostsFilter');
+    const currentValue = filter.value;
+
+    // Get unique platforms from posts
+    const platforms = [...new Set(posts.map(p => p.platformName))].sort();
+
+    filter.innerHTML = '<sl-option value="">All platforms</sl-option>';
+    platforms.forEach(platform => {
+        const count = posts.filter(p => p.platformName === platform).length;
+        const option = document.createElement('sl-option');
+        option.value = platform;
+        option.textContent = `${platform} (${count})`;
+        filter.appendChild(option);
+    });
+
+    // Restore previous selection if it still exists
+    if (currentValue && platforms.includes(currentValue)) {
+        filter.value = currentValue;
+    }
+
+    updateSocialPostsCount(posts);
+}
+
+// Filter social posts by platform
+function filterSocialPosts() {
+    const filterValue = document.getElementById('socialPostsFilter').value;
+
+    if (!filterValue) {
+        displaySocialPosts(allSocialPosts);
+        updateSocialPostsCount(allSocialPosts);
+    } else {
+        const filtered = allSocialPosts.filter(p => p.platformName === filterValue);
+        displaySocialPosts(filtered);
+        updateSocialPostsCount(filtered, allSocialPosts.length);
+    }
+}
+
+// Update the posts count display
+function updateSocialPostsCount(displayedPosts, totalPosts = null) {
+    const countEl = document.getElementById('socialPostsCount');
+    if (totalPosts !== null && totalPosts !== displayedPosts.length) {
+        countEl.textContent = `Showing ${displayedPosts.length} of ${totalPosts} posts`;
+    } else {
+        countEl.textContent = `${displayedPosts.length} posts`;
+    }
+}
+
+// Generate social posts
+async function generateSocialPosts() {
+    const platformId = document.getElementById('socialPlatformSelect').value;
+    const personaId = document.getElementById('socialPersonaSelect').value || null;
+    const charLength = document.getElementById('socialCharLengthSelect').value || '1200-1800';
+
+    if (!platformId) {
+        showToast('Please select a platform', 'warning', 'exclamation-triangle');
+        return;
+    }
+
+    const btn = document.getElementById('generateSocialPostsBtn');
+    btn.loading = true;
+    document.getElementById('socialGenerationStatus').classList.remove('hidden');
+
+    try {
+        const response = await fetch(`/api/blog/posts/${currentSocialBlogPostId}/generate-social`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platformId, personaId, charLength })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Social post generated!', 'success', 'check-circle');
+            // Add new posts to the stored array and update filter
+            allSocialPosts = [...data.posts, ...allSocialPosts];
+            populateSocialPostsFilter(allSocialPosts);
+            // Re-apply current filter or show all
+            filterSocialPosts();
+            document.getElementById('socialPostsFilterContainer').classList.remove('hidden');
+            // Refresh blog list to update icon
+            loadPublishedBlogs();
+        } else {
+            showToast(data.error || 'Failed to generate social posts', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error generating social posts:', error);
+        showToast('Error generating social posts', 'danger', 'exclamation-triangle');
+    } finally {
+        btn.loading = false;
+        document.getElementById('socialGenerationStatus').classList.add('hidden');
+    }
+}
+
+// Display social posts in the modal
+function displaySocialPosts(posts, prepend = false) {
+    const container = document.getElementById('socialPostsContainer');
+
+    const postsHtml = posts.map(post => `
+        <sl-card class="social-post-card">
+            <div class="flex justify-between items-start mb-2">
+                <div class="flex items-center gap-2">
+                    <sl-badge variant="primary">${escapeHtml(post.platformName)}</sl-badge>
+                    <sl-badge variant="neutral">${escapeHtml(post.personaName)}</sl-badge>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">${post.characterCount || post.content.length} chars</span>
+                    <sl-tooltip content="Copy to clipboard">
+                        <sl-icon-button name="clipboard" label="Copy" class="copy-social-btn" data-content="${escapeHtml(post.content).replace(/"/g, '&quot;')}"></sl-icon-button>
+                    </sl-tooltip>
+                    <sl-tooltip content="Create Task">
+                        <sl-icon-button name="clipboard-plus" label="Create Task" class="create-task-btn" data-post-id="${post._id}"></sl-icon-button>
+                    </sl-tooltip>
+                    <sl-tooltip content="Delete">
+                        <sl-icon-button name="trash" label="Delete" class="delete-social-btn" data-post-id="${post._id}"></sl-icon-button>
+                    </sl-tooltip>
+                </div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded text-sm whitespace-pre-wrap">${escapeHtml(post.content)}</div>
+        </sl-card>
+    `).join('');
+
+    if (prepend) {
+        container.insertAdjacentHTML('afterbegin', postsHtml);
+    } else {
+        container.innerHTML = postsHtml;
+    }
+
+    // Attach event listeners
+    container.querySelectorAll('.copy-social-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const content = btn.dataset.content.replace(/&quot;/g, '"');
+            copyToClipboard(content);
+        });
+    });
+
+    container.querySelectorAll('.create-task-btn').forEach(btn => {
+        btn.addEventListener('click', () => createTaskFromSocialPost(btn.dataset.postId));
+    });
+
+    container.querySelectorAll('.delete-social-btn').forEach(btn => {
+        btn.addEventListener('click', () => deleteSocialPost(btn.dataset.postId));
+    });
+}
+
+// Copy content to clipboard
+async function copyToClipboard(content) {
+    try {
+        await navigator.clipboard.writeText(content);
+        showToast('Copied to clipboard!', 'success', 'check-circle');
+    } catch (error) {
+        console.error('Failed to copy:', error);
+        showToast('Failed to copy to clipboard', 'danger', 'exclamation-triangle');
+    }
+}
+
+// Delete social post
+async function deleteSocialPost(postId) {
+    if (!confirm('Delete this social post?')) return;
+
+    try {
+        const response = await fetch(`/api/blog/social-posts/${postId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Social post deleted', 'success', 'check-circle');
+            // Remove from local array
+            allSocialPosts = allSocialPosts.filter(p => p._id !== postId);
+            // Update filter and display
+            if (allSocialPosts.length > 0) {
+                populateSocialPostsFilter(allSocialPosts);
+                filterSocialPosts();
+            } else {
+                document.getElementById('socialPostsContainer').innerHTML = '';
+                document.getElementById('socialPostsFilterContainer').classList.add('hidden');
+            }
+            // Refresh blog list to update icon
+            loadPublishedBlogs();
+        } else {
+            showToast(data.error || 'Failed to delete social post', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error deleting social post:', error);
+        showToast('Error deleting social post', 'danger', 'exclamation-triangle');
+    }
+}
+
+// ============================================
+// Platform Management Functions
+// ============================================
+
+// Open platform manager modal
+async function openPlatformManager() {
+    await loadPlatformsList();
+    document.getElementById('platformModal').show();
+}
+
+// Load platforms list for management
+async function loadPlatformsList() {
+    try {
+        const response = await fetch('/api/blog/social-platforms');
+        const data = await response.json();
+
+        const container = document.getElementById('platformsList');
+
+        if (!data.success || data.platforms.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No platforms created yet. Create one below!</p>';
+            return;
+        }
+
+        container.innerHTML = data.platforms.map(platform => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded border">
+                <div class="flex-1">
+                    <strong class="text-gray-900">${escapeHtml(platform.name)}</strong>
+                    <p class="text-sm text-gray-600 mt-1 line-clamp-2">${escapeHtml(platform.instructions)}</p>
+                </div>
+                <div class="flex gap-2 ml-4">
+                    <sl-button size="small" variant="default" class="edit-platform-btn" data-platform-id="${platform._id}">
+                        <sl-icon name="pencil"></sl-icon>
+                    </sl-button>
+                    <sl-button size="small" variant="danger" outline class="delete-platform-btn" data-platform-id="${platform._id}">
+                        <sl-icon name="trash"></sl-icon>
+                    </sl-button>
+                </div>
+            </div>
+        `).join('');
+
+        // Attach event listeners
+        container.querySelectorAll('.edit-platform-btn').forEach(btn => {
+            btn.addEventListener('click', () => editPlatform(btn.dataset.platformId));
+        });
+        container.querySelectorAll('.delete-platform-btn').forEach(btn => {
+            btn.addEventListener('click', () => deletePlatform(btn.dataset.platformId));
+        });
+    } catch (error) {
+        console.error('Error loading platforms list:', error);
+        document.getElementById('platformsList').innerHTML =
+            '<p class="text-red-500 text-sm">Failed to load platforms</p>';
+    }
+}
+
+// Create new platform
+async function createPlatform() {
+    const btn = document.getElementById('createPlatformBtn');
+    btn.loading = true;
+
+    try {
+        const name = document.getElementById('newPlatformName').value.trim();
+        const instructions = document.getElementById('newPlatformInstructions').value.trim();
+        const url = document.getElementById('newPlatformUrl').value.trim();
+
+        if (!name) {
+            showToast('Platform name is required', 'warning', 'exclamation-triangle');
+            btn.loading = false;
+            return;
+        }
+
+        if (!instructions) {
+            showToast('Platform instructions are required', 'warning', 'exclamation-triangle');
+            btn.loading = false;
+            return;
+        }
+
+        const response = await fetch('/api/blog/social-platforms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, instructions, url })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast(`Platform "${name}" created!`, 'success', 'check-circle');
+            // Clear form
+            document.getElementById('newPlatformName').value = '';
+            document.getElementById('newPlatformInstructions').value = '';
+            document.getElementById('newPlatformUrl').value = '';
+            // Close the details
+            document.getElementById('addPlatformDetails').removeAttribute('open');
+            // Refresh lists
+            await loadSocialPlatforms();
+            await loadPlatformsList();
+        } else {
+            showToast(data.error || 'Failed to create platform', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error creating platform:', error);
+        showToast('Error creating platform', 'danger', 'exclamation-triangle');
+    } finally {
+        btn.loading = false;
+    }
+}
+
+// Edit platform - open edit modal
+async function editPlatform(platformId) {
+    try {
+        const response = await fetch(`/api/blog/social-platforms/${platformId}`);
+        const data = await response.json();
+
+        if (data.success) {
+            editingPlatformId = platformId;
+            document.getElementById('editPlatformName').value = data.platform.name || '';
+            document.getElementById('editPlatformInstructions').value = data.platform.instructions || '';
+            document.getElementById('editPlatformUrl').value = data.platform.url || '';
+            document.getElementById('editPlatformModal').show();
+        } else {
+            showToast(data.error || 'Failed to load platform', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error loading platform:', error);
+        showToast('Error loading platform', 'danger', 'exclamation-triangle');
+    }
+}
+
+// Update platform
+async function updatePlatform() {
+    if (!editingPlatformId) return;
+
+    const btn = document.getElementById('updatePlatformBtn');
+    btn.loading = true;
+
+    try {
+        const name = document.getElementById('editPlatformName').value.trim();
+        const instructions = document.getElementById('editPlatformInstructions').value.trim();
+        const url = document.getElementById('editPlatformUrl').value.trim();
+
+        if (!name) {
+            showToast('Platform name is required', 'warning', 'exclamation-triangle');
+            btn.loading = false;
+            return;
+        }
+
+        const response = await fetch(`/api/blog/social-platforms/${editingPlatformId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, instructions, url })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Platform updated!', 'success', 'check-circle');
+            document.getElementById('editPlatformModal').hide();
+            editingPlatformId = null;
+            // Refresh lists
+            await loadSocialPlatforms();
+            await loadPlatformsList();
+        } else {
+            showToast(data.error || 'Failed to update platform', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error updating platform:', error);
+        showToast('Error updating platform', 'danger', 'exclamation-triangle');
+    } finally {
+        btn.loading = false;
+    }
+}
+
+// Delete platform
+async function deletePlatform(platformId) {
+    if (!confirm('Are you sure you want to delete this platform?')) return;
+
+    try {
+        const response = await fetch(`/api/blog/social-platforms/${platformId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Platform deleted', 'success', 'check-circle');
+            // Refresh lists
+            await loadSocialPlatforms();
+            await loadPlatformsList();
+        } else {
+            showToast(data.error || 'Failed to delete platform', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error deleting platform:', error);
+        showToast('Error deleting platform', 'danger', 'exclamation-triangle');
+    }
+}
+
+// ============================================
+// Task Creation Functions
+// ============================================
+
+// Create task from social post (no delegation - that happens in task view)
+async function createTaskFromSocialPost(postId) {
+    try {
+        const response = await fetch(`/api/blog/social-posts/${postId}/create-task`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Task created', 'success', 'check-circle');
+        } else {
+            showToast(data.error || 'Failed to create task', 'danger', 'exclamation-triangle');
+        }
+    } catch (error) {
+        console.error('Error creating task:', error);
+        showToast('Error creating task', 'danger', 'exclamation-triangle');
+    }
 }

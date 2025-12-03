@@ -1,6 +1,7 @@
 const Task = require('../models/Task');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
+const blogService = require('../services/blogService');
 
 // @desc    Create a new task manually
 // @route   POST /api/tasks
@@ -516,7 +517,7 @@ exports.bulkSkipTasks = async (req, res) => {
 // @access  Private
 exports.delegateTask = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, blogLinkUrl } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
@@ -530,6 +531,19 @@ exports.delegateTask = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // If blog link provided and this is a post task, inject the link using Haiku
+    if (blogLinkUrl && task.taskType === 'post') {
+      try {
+        const modifiedContent = await blogService.injectBlogLink(task.snippet, blogLinkUrl);
+        task.metadata = task.metadata || {};
+        task.metadata.blogLinkUrl = blogLinkUrl;
+        task.metadata.blogLinkContent = modifiedContent;
+      } catch (linkError) {
+        console.error('Error injecting blog link:', linkError);
+        // Don't fail the delegation, just skip the link injection
+      }
     }
 
     task.delegatedTo = userId;
@@ -549,7 +563,8 @@ exports.delegateTask = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email
-        }
+        },
+        blogLinkContent: task.metadata?.blogLinkContent || null
       });
     }
 

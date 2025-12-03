@@ -25,6 +25,7 @@ const searchRoutes = require('./src/routes/search');
 const taskRoutes = require('./src/routes/tasks');
 const adminRoutes = require('./src/routes/admin');
 const blogRoutes = require('./src/routes/blog');
+const postsRoutes = require('./src/routes/posts');
 
 // Import middleware
 const auth = require('./src/middleware/auth');
@@ -133,6 +134,7 @@ app.use('/api', searchRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/admin', adminRoutes);
 app.use(blogRoutes);
+app.use(postsRoutes);
 
 // Users API endpoint
 const taskController = require('./src/controllers/taskController');
@@ -370,6 +372,7 @@ const server = app.listen(PORT, () => {
 
   // Make io available globally BEFORE starting job
   global.io = io;
+  app.set('io', io); // Also set on app for req.app.get('io') access in controllers
 
   // Start intelligence job only in production
   if (process.env.NODE_ENV === 'production') {

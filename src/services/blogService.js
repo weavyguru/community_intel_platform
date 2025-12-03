@@ -7,6 +7,36 @@ const BlogInstructions = require('../models/BlogInstructions');
 const Persona = require('../models/Persona');
 
 /**
+ * Retry wrapper for Claude API calls that handles overloaded errors (529)
+ * @param {Function} apiCall - Async function that makes the API call
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @param {number} baseDelay - Base delay in ms between retries (default: 2000)
+ * @returns {Promise} - Result of the API call
+ */
+async function withRetry(apiCall, maxRetries = 3, baseDelay = 2000) {
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await apiCall();
+        } catch (error) {
+            lastError = error;
+            const isOverloaded = error.status === 529 ||
+                (error.error?.error?.type === 'overloaded_error');
+            const shouldRetry = error.headers?.['x-should-retry'] === 'true' || isOverloaded;
+
+            if (shouldRetry && attempt < maxRetries) {
+                const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+                console.log(`[Retry] API overloaded, attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                throw error;
+            }
+        }
+    }
+    throw lastError;
+}
+
+/**
  * Sanitize a string to remove invalid Unicode surrogate pairs
  * This prevents JSON encoding errors when sending to Claude API
  * ALWAYS processes the string - JSON.stringify doesn't catch lone surrogates in Node.js
@@ -112,7 +142,7 @@ Guidelines:
     if (personaId) {
         const persona = await getPersonaById(personaId);
         if (persona && !persona.isDefault && persona.postModifier) {
-            result.postGeneration += `\n\n## Voice/Style:\n${persona.postModifier}`;
+            result.postGeneration = `IMPORTANT - WRITING PERSONA: You MUST write this blog post using the following voice and style. This persona takes priority over generic writing guidelines:\n\n${persona.postModifier}\n\n---\n\n${result.postGeneration}`;
             console.log(`[Blog Service] Applied persona "${persona.name}" to post generation`);
         }
     }
@@ -153,14 +183,14 @@ async function searchForBlogContent(userQuery, platforms = null, statusCallback 
         logStep('time_window', 'complete', `Searching last 90 days (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]})`);
 
         // Step 1: Generate search strategy
-        logStep('strategy', 'start', 'Generating search strategy with Claude Sonnet 4.5...');
+        logStep('strategy', 'start', 'Generating search strategy with Claude Haiku 4.5...');
 
         const searchPlan = await claudeService.analyzeSearchIntent(userQuery, platforms);
 
         logStep('strategy', 'complete',
             `Strategy created: ${searchPlan.searchQueries.length} queries, expected ${searchPlan.expectedIterations} iterations`,
             {
-                model: 'claude-sonnet-4-5-20250929',
+                model: 'claude-haiku-4-5',
                 complexity: searchPlan.queryComplexity,
                 queries: searchPlan.searchQueries.map(q => q.query)
             }
@@ -334,22 +364,22 @@ Return your response as valid JSON only (no markdown, no code blocks):
   "reasoning": "Overall 1-2 sentence explanation of your topic selection strategy"
 }`;
 
-        logStep('planning', 'processing', 'Generating topics with Claude Sonnet 4.5...', {
-            model: 'claude-sonnet-4-5-20250929',
+        logStep('planning', 'processing', 'Generating topics with Claude Haiku 4.5...', {
+            model: 'claude-haiku-4-5',
             sourcesAnalyzed: searchResults.length
         });
 
         const anthropic = getClaudeClient();
         // Sanitize the FINAL prompt right before sending to ensure no invalid Unicode
         const sanitizedPrompt = sanitizeUnicode(prompt);
-        const message = await anthropic.messages.create({
-            model: 'claude-sonnet-4-5-20250929',
+        const message = await withRetry(() => anthropic.messages.create({
+            model: 'claude-haiku-4-5',
             max_tokens: 4096,
             messages: [{
                 role: 'user',
                 content: sanitizedPrompt
             }]
-        });
+        }));
 
         const responseText = message.content[0].text;
 
@@ -445,7 +475,15 @@ async function generateBlogPost(topic, synopsis, relevanceReason, searchResults,
         });
 
         // Step 2: Generate blog content
-        logStep('content', 'start', 'Writing blog post content with Claude Sonnet 4.5...');
+        // Get persona name for status message
+        let personaName = 'Neutral';
+        if (personaId) {
+            const persona = await getPersonaById(personaId);
+            if (persona && !persona.isDefault) {
+                personaName = persona.name;
+            }
+        }
+        logStep('content', 'start', `Writing blog post with Claude Haiku 4.5 (Persona: ${personaName})...`);
 
         // Prepare relevant sources for context (sanitize ALL fields to remove invalid Unicode)
         const contextSources = searchResults.slice(0, 50).map((result, idx) => {
@@ -496,20 +534,20 @@ Return your response as valid JSON only (no markdown, no code blocks):
         // Use the same anthropic client instance from icon selection
         // Sanitize the FINAL prompt right before sending to ensure no invalid Unicode
         const sanitizedPrompt = sanitizeUnicode(prompt);
-        const message = await anthropic.messages.create({
-            model: 'claude-sonnet-4-5-20250929',
+        const message = await withRetry(() => anthropic.messages.create({
+            model: 'claude-haiku-4-5',
             max_tokens: 16000,
             messages: [{
                 role: 'user',
                 content: sanitizedPrompt
             }]
-        });
+        }));
 
         const responseText = message.content[0].text;
 
         logStep('content', 'parsing', 'Parsing blog post content...', {
             tokens: message.usage.input_tokens + message.usage.output_tokens,
-            model: 'claude-sonnet-4-5-20250929'
+            model: 'claude-haiku-4-5'
         });
 
         // Parse JSON response
@@ -550,8 +588,154 @@ Return your response as valid JSON only (no markdown, no code blocks):
     }
 }
 
+/**
+ * Generate social media posts from a blog post
+ * Uses claude-haiku-4-5 to generate a social post
+ * @param {Object} blogPost - The blog post document
+ * @param {Object} platform - The social platform with name and instructions
+ * @param {Object|null} persona - Optional persona for voice/style
+ * @param {string} charLength - Character length range (e.g., '1200-1800', '600-1200', '200-600')
+ * @returns {Array<string>} Array with generated social post content
+ */
+async function generateSocialPosts(blogPost, platform, persona = null, charLength = '1200-1800') {
+    console.log(`[Social Posts] Generating for platform "${platform.name}" with persona "${persona?.name || 'Neutral'}" (${charLength} chars)`);
+
+    const anthropic = getClaudeClient();
+
+    // Build the persona instruction
+    let personaInstruction = '';
+    if (persona && persona.postModifier) {
+        personaInstruction = `\n\nWRITING VOICE & PERSONA: Write from this perspective and voice:\n${sanitizeUnicode(persona.postModifier)}`;
+    }
+
+    // Sanitize blog content
+    const sanitizedTitle = sanitizeUnicode(blogPost.title || '');
+    const sanitizedSubtitle = sanitizeUnicode(blogPost.subtitle || '');
+    const sanitizedBody = sanitizeUnicode(blogPost.body || '');
+    const sanitizedPlatformName = sanitizeUnicode(platform.name || '');
+    const sanitizedPlatformInstructions = sanitizeUnicode(platform.instructions || '');
+
+    // Build platform instruction with emphasis
+    let platformInstruction = '';
+    if (sanitizedPlatformInstructions) {
+        platformInstruction = `\n\nPLATFORM FORMAT & STYLE (${sanitizedPlatformName}): Follow these platform-specific rules for structure, hashtags, length, and formatting:\n${sanitizedPlatformInstructions}`;
+    }
+
+    const prompt = `You are a social media content creator. Create a social media post promoting a blog article.
+${platformInstruction}
+${personaInstruction}
+
+Blog Post to Promote:
+Title: ${sanitizedTitle}
+Subtitle: ${sanitizedSubtitle}
+
+Blog Content:
+${sanitizedBody}
+
+Requirements:
+- Create exactly 1 social media post
+- The post MUST be between ${charLength} characters (this is strict)
+- The post should be engaging and encourage clicks/shares
+- Include relevant emojis where appropriate for the platform
+- Do NOT include placeholder hashtags like #YourCompany - only include real, relevant hashtags
+- Make the post complete and ready to publish
+- CRITICAL: Do NOT include any URLs or links in the post. No blog links, no website links, no shortened URLs. The URL will be added separately later. Never make up or hallucinate URLs.
+
+Return your response as valid JSON only (no markdown, no code blocks):
+{
+  "post": "The social post content (${charLength} chars)..."
+}`;
+
+    const sanitizedPrompt = sanitizeUnicode(prompt);
+
+    const message = await withRetry(() => anthropic.messages.create({
+        model: 'claude-haiku-4-5',
+        max_tokens: 8192,
+        messages: [{
+            role: 'user',
+            content: sanitizedPrompt
+        }]
+    }));
+
+    const responseText = message.content[0].text;
+
+    console.log(`[Social Posts] API response received, tokens: ${message.usage.input_tokens + message.usage.output_tokens}`);
+
+    // Parse JSON response
+    let result;
+    try {
+        const cleanedResponse = responseText
+            .replace(/```json\n?/g, '')
+            .replace(/```\n?/g, '')
+            .trim();
+        result = JSON.parse(cleanedResponse);
+    } catch (parseError) {
+        console.error('[Social Posts] Failed to parse response:', parseError.message);
+        throw new Error('Invalid JSON response from Claude');
+    }
+
+    if (!result.post) {
+        throw new Error('No post generated from Claude');
+    }
+
+    console.log(`[Social Posts] Generated 1 post for "${platform.name}"`);
+
+    // Return as array with single post for consistency with controller
+    return [result.post];
+}
+
+/**
+ * Inject a blog link into a social post using Claude Haiku
+ * Adds a natural call-to-action before any hashtags without changing original content
+ * @param {string} postContent - The original post content
+ * @param {string} blogUrl - The blog URL to inject
+ * @returns {Promise<string>} - The modified post content with blog link
+ */
+async function injectBlogLink(postContent, blogUrl) {
+    if (!postContent || !blogUrl) {
+        return postContent;
+    }
+
+    console.log(`[Blog Link] Injecting blog link into post...`);
+
+    const anthropic = getClaudeClient();
+
+    const prompt = `Add a natural, creative call-to-action linking to this URL: ${blogUrl}
+
+Rules:
+1. Insert the CTA near the end but BEFORE any hashtags
+2. Use varied phrasing like "Dive deeper:", "Full article:", "Learn more:", "Read the full story:", etc.
+3. DO NOT modify any other content in the post - keep all original text exactly as is
+4. Keep the link on its own line for readability
+5. The CTA should feel natural and fit the tone of the post
+
+Post content:
+${postContent}
+
+Return ONLY the modified post content, nothing else. No explanations, no quotes around it.`;
+
+    const sanitizedPrompt = sanitizeUnicode(prompt);
+
+    const message = await withRetry(() => anthropic.messages.create({
+        model: 'claude-haiku-4-5',
+        max_tokens: 4096,
+        messages: [{
+            role: 'user',
+            content: sanitizedPrompt
+        }]
+    }));
+
+    const responseText = message.content[0].text.trim();
+
+    console.log(`[Blog Link] Link injected successfully, tokens: ${message.usage.input_tokens + message.usage.output_tokens}`);
+
+    return responseText;
+}
+
 module.exports = {
     searchForBlogContent,
     generateBlogTopics,
-    generateBlogPost
+    generateBlogPost,
+    generateSocialPosts,
+    injectBlogLink
 };
