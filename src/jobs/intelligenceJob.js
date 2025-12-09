@@ -13,7 +13,7 @@ class IntelligenceJob {
   constructor() {
     this.isRunning = false;
     this.lastSuccessfulRun = null;
-    this.intervalHours = 4; // Default: Job runs every 4 hours
+    this.intervalHours = 12; // Default: Job runs every 12 hours
     this.lookbackHours = 48; // Default: Look back 48 hours in content timestamps
     this.stats = {
       totalRuns: 0,
