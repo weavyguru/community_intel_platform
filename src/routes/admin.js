@@ -22,5 +22,6 @@ router.post('/agent/run', auth, adminAuth, adminController.runBackgroundAgent);
 router.get('/job/stats', auth, adminAuth, adminController.getJobStats);
 router.get('/job/history', auth, adminAuth, adminController.getJobHistory);
 router.put('/job/interval', auth, adminAuth, adminController.updateJobInterval);
+router.put('/job/toggle', auth, adminAuth, adminController.toggleJobEnabled);
 
 module.exports = router;

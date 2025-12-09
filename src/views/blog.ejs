@@ -535,7 +535,7 @@
       </sl-button>
       <sl-button id="publishHubSpotBtn" variant="success">
         <sl-icon slot="prefix" name="cloud-upload"></sl-icon>
-        Publish to HubSpot (Draft)
+        <%= blogPublisher === 'custom' ? 'Publish to Blog' : 'Publish to HubSpot (Draft)' %>
       </sl-button>
     </div>
     <div class="flex gap-2">
@@ -551,4 +551,8 @@
 <!-- Load libraries before blog.js -->
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+<script>
+  // Pass blog publisher type to JS
+  window.blogPublisher = '<%= blogPublisher %>';
+</script>
 <script src="/js/blog.js"></script>

@@ -404,7 +404,7 @@ function createPostCard(post, isNew = false) {
                 }">
                     ${post.status}
                 </sl-badge>
-                ${post.publishedToHubSpot ? '<sl-badge variant="success"><sl-icon name="check-circle"></sl-icon> HubSpot</sl-badge>' : ''}
+                ${post.publishedToHubSpot ? `<sl-badge variant="success"><sl-icon name="check-circle"></sl-icon> ${window.blogPublisher === 'custom' ? 'Published' : 'HubSpot'}</sl-badge>` : ''}
             </div>
 
             <sl-button variant="primary" size="small" class="edit-post-btn" data-post-id="${post.id}">
@@ -467,8 +467,8 @@ function createPublishedPostRow(post) {
                 }">
                     ${post.status}
                 </sl-badge>
-                ${post.publishedToHubSpot ? `<sl-badge variant="success"><sl-icon name="check-circle"></sl-icon> HubSpot</sl-badge>` : ''}
-                ${post.hubSpotUrl ? `<a href="${post.hubSpotUrl}" target="_blank" class="text-xs text-blue-600 hover:underline">View on HubSpot →</a>` : ''}
+                ${post.publishedToHubSpot ? `<sl-badge variant="success"><sl-icon name="check-circle"></sl-icon> ${window.blogPublisher === 'custom' ? 'Published' : 'HubSpot'}</sl-badge>` : ''}
+                ${post.hubSpotUrl ? `<a href="${post.hubSpotUrl}" target="_blank" class="text-xs text-blue-600 hover:underline">${window.blogPublisher === 'custom' ? 'View on Blog →' : 'View on HubSpot →'}</a>` : ''}
             </div>
         </div>
         <sl-tooltip content="${socialTooltip}">
@@ -657,10 +657,12 @@ async function savePost() {
     }
 }
 
-// Publish to HubSpot
+// Publish to Blog/HubSpot
 async function publishToHubSpot() {
     const btn = document.getElementById('publishHubSpotBtn');
     btn.loading = true;
+
+    const publisherName = window.blogPublisher === 'custom' ? 'Blog' : 'HubSpot';
 
     try {
         const response = await fetch(`/api/blog/posts/${currentPostId}/publish-hubspot`, {
@@ -670,15 +672,15 @@ async function publishToHubSpot() {
         const data = await response.json();
 
         if (data.success) {
-            showToast('Published to HubSpot successfully!', 'success', 'check-circle');
+            showToast(`Published to ${publisherName} successfully!`, 'success', 'check-circle');
             document.getElementById('blogEditorModal').hide();
             loadPublishedBlogs();
         } else {
-            showToast(data.error || 'Failed to publish to HubSpot', 'danger', 'exclamation-triangle');
+            showToast(data.error || `Failed to publish to ${publisherName}`, 'danger', 'exclamation-triangle');
         }
     } catch (error) {
-        console.error('Error publishing to HubSpot:', error);
-        showToast('Error publishing to HubSpot', 'danger', 'exclamation-triangle');
+        console.error(`Error publishing to ${publisherName}:`, error);
+        showToast(`Error publishing to ${publisherName}`, 'danger', 'exclamation-triangle');
     } finally {
         btn.loading = false;
     }

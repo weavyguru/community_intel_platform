@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const agentConfigSchema = new mongoose.Schema({
   type: { type: String, enum: ['ask', 'background', 'create-tasks'], required: true, unique: true },
+  enabled: { type: Boolean, default: false }, // Whether the agent is enabled (default OFF for safety)
   instructions: { type: String, required: true }, // Current Markdown instructions
   valuePropositions: { type: String }, // For create-tasks agent - Weavy context
   searchFunctions: [{

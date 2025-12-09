@@ -90,6 +90,15 @@ class IntelligenceJob {
       return;
     }
 
+    // Check if the background agent is enabled (skip check for manual runs)
+    if (!isManual) {
+      const isEnabled = await this.isEnabled();
+      if (!isEnabled) {
+        console.log('Intelligence job is disabled, skipping scheduled run...');
+        return;
+      }
+    }
+
     this.isRunning = true;
     this.stats.totalRuns++;
 
@@ -819,13 +828,47 @@ Please combine these into a single coherent analysis. Synthesize the insights, a
     }
   }
 
-  getStats() {
+  /**
+   * Check if the background agent is enabled in the database
+   */
+  async isEnabled() {
+    try {
+      const config = await AgentConfig.findOne({ type: 'background' });
+      // Default to false if no config exists (safety first)
+      return config ? config.enabled === true : false;
+    } catch (error) {
+      console.error('Error checking if background agent is enabled:', error);
+      return false; // Default to disabled on error
+    }
+  }
+
+  /**
+   * Set the enabled status of the background agent
+   */
+  async setEnabled(enabled) {
+    try {
+      await AgentConfig.findOneAndUpdate(
+        { type: 'background' },
+        { enabled: enabled },
+        { upsert: false }
+      );
+      console.log(`Background agent ${enabled ? 'enabled' : 'disabled'}`);
+      return true;
+    } catch (error) {
+      console.error('Error setting background agent enabled status:', error);
+      return false;
+    }
+  }
+
+  async getStats() {
+    const enabled = await this.isEnabled();
     return {
       ...this.stats,
       lastSuccessfulRun: this.lastSuccessfulRun,
       isRunning: this.isRunning,
       intervalHours: this.intervalHours,
-      lookbackHours: this.lookbackHours
+      lookbackHours: this.lookbackHours,
+      enabled: enabled
     };
   }
 

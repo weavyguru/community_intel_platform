@@ -200,11 +200,13 @@ app.get('/blog', auth, async (req, res) => {
       ]
     });
 
+    const blogPublishService = require('./src/services/blogPublishService');
     res.render('blog', {
       title: `Blog Creator - ${branding.companyName}`,
       activePage: 'blog',
       user: req.user,
-      taskCount
+      taskCount,
+      blogPublisher: blogPublishService.getPublisherType()
     });
   } catch (error) {
     console.error('Blog page error:', error);

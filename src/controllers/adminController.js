@@ -379,7 +379,7 @@ exports.runBackgroundAgent = async (req, res) => {
 // @access  Private/Admin
 exports.getJobStats = async (req, res) => {
   try {
-    const stats = intelligenceJob.getStats();
+    const stats = await intelligenceJob.getStats();
 
     res.json({
       success: true,
@@ -388,6 +388,34 @@ exports.getJobStats = async (req, res) => {
   } catch (error) {
     console.error('Get job stats error:', error);
     res.status(500).json({ error: 'Error getting job stats' });
+  }
+};
+
+// @desc    Toggle intelligence job enabled status
+// @route   PUT /api/admin/job/toggle
+// @access  Private/Admin
+exports.toggleJobEnabled = async (req, res) => {
+  try {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+
+    const success = await intelligenceJob.setEnabled(enabled);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: `Background agent ${enabled ? 'enabled' : 'disabled'}`,
+        enabled
+      });
+    } else {
+      res.status(500).json({ error: 'Error updating enabled status' });
+    }
+  } catch (error) {
+    console.error('Toggle job enabled error:', error);
+    res.status(500).json({ error: 'Error toggling job enabled status' });
   }
 };
 

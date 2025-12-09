@@ -81,6 +81,14 @@
   <div class="bg-white rounded-lg shadow p-6">
     <h2 class="text-xl font-semibold mb-4">Configuration</h2>
     <div class="space-y-4">
+      <!-- Enable/Disable Toggle -->
+      <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+        <div>
+          <span class="text-sm font-medium text-gray-700">Background Agent</span>
+          <p class="text-xs text-gray-500 mt-1">When disabled, scheduled runs will be skipped. Manual runs still work.</p>
+        </div>
+        <sl-switch id="enabledToggle" size="large"></sl-switch>
+      </div>
       <div class="flex items-center justify-between">
         <span class="text-sm font-medium text-gray-700">Job Status:</span>
         <span id="jobStatus" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">-</span>
@@ -178,6 +186,7 @@
     document.getElementById('updateIntervalBtn').addEventListener('click', updateInterval);
     document.getElementById('cancelRunBtn').addEventListener('click', hideRunJobDialog);
     document.getElementById('confirmRunBtn').addEventListener('click', confirmRunJob);
+    document.getElementById('enabledToggle').addEventListener('sl-change', toggleEnabled);
   });
 
   async function refreshStats() {
@@ -193,6 +202,10 @@
         document.getElementById('totalItems').textContent = stats.totalItemsProcessed;
         document.getElementById('intervalHours').value = stats.intervalHours || 4;
 
+        // Update enabled toggle
+        const enabledToggle = document.getElementById('enabledToggle');
+        enabledToggle.checked = stats.enabled === true;
+
         const successRate = stats.totalRuns > 0
           ? Math.round((stats.successfulRuns / stats.totalRuns) * 100)
           : 0;
@@ -202,6 +215,9 @@
         if (stats.isRunning) {
           statusEl.textContent = 'Running';
           statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
+        } else if (!stats.enabled) {
+          statusEl.textContent = 'Disabled';
+          statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800';
         } else {
           statusEl.textContent = 'Idle';
           statusEl.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800';
@@ -448,6 +464,34 @@
     } catch (error) {
       console.error('Error updating interval:', error);
       showToast('Error updating interval', 'danger', 'exclamation-triangle');
+    }
+  }
+
+  async function toggleEnabled(event) {
+    const enabled = event.target.checked;
+
+    try {
+      const response = await fetch('/api/admin/job/toggle', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast(`Background agent ${enabled ? 'enabled' : 'disabled'}`, 'success', 'check-circle');
+        await refreshStats();
+      } else {
+        // Revert toggle on error
+        event.target.checked = !enabled;
+        showToast(data.error || 'Error updating status', 'danger', 'exclamation-triangle');
+      }
+    } catch (error) {
+      console.error('Error toggling enabled:', error);
+      // Revert toggle on error
+      event.target.checked = !enabled;
+      showToast('Error updating status', 'danger', 'exclamation-triangle');
     }
   }
 
