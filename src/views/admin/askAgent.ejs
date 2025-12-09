@@ -23,11 +23,11 @@
       <p class="mt-2 text-gray-600">Configure the AI assistant that responds to user questions</p>
     </div>
     <div class="flex gap-2">
-      <sl-button onclick="loadVersionHistory()" variant="default">
+      <sl-button id="versionHistoryBtn" variant="default">
         <sl-icon slot="prefix" name="clock-history"></sl-icon>
         Version History
       </sl-button>
-      <sl-button id="saveButton" onclick="saveConfig()" variant="primary">
+      <sl-button id="saveButton" variant="primary">
         <sl-icon slot="prefix" name="save"></sl-icon>
         Save Changes
       </sl-button>
@@ -178,4 +178,8 @@
       localStorage.setItem('askAgentDraft', editor.getValue());
     }
   }, 30000);
+
+  // Attach event listeners (CSP compliant)
+  document.getElementById('saveButton').addEventListener('click', saveConfig);
+  document.getElementById('versionHistoryBtn').addEventListener('click', loadVersionHistory);
 </script>
