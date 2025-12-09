@@ -14,6 +14,7 @@ const connectDB = require('./src/config/database');
 const { initializeSendGrid } = require('./src/config/sendgrid');
 const intelligenceJob = require('./src/jobs/intelligenceJob');
 const Persona = require('./src/models/Persona');
+const branding = require('./src/config/branding');
 
 // Load version
 const versionFile = path.join(__dirname, 'version.json');
@@ -122,9 +123,10 @@ app.set('view cache', false); // Disable view caching for development
 // Static files
 app.use(express.static('public'));
 
-// Make version available to all views
+// Make version and branding available to all views
 app.use((req, res, next) => {
   res.locals.version = version;
+  res.locals.branding = branding;
   next();
 });
 
@@ -153,7 +155,7 @@ app.get('/', auth, async (req, res) => {
     });
 
     res.render('index', {
-      title: 'Home - Community Intelligence',
+      title: `Home - ${branding.companyName}`,
       activePage: 'home',
       user: req.user,
       taskCount
@@ -176,7 +178,7 @@ app.get('/tasks', auth, async (req, res) => {
     });
 
     res.render('tasks', {
-      title: 'Tasks - Community Intelligence',
+      title: `Tasks - ${branding.companyName}`,
       activePage: 'tasks',
       user: req.user,
       taskCount
@@ -199,7 +201,7 @@ app.get('/blog', auth, async (req, res) => {
     });
 
     res.render('blog', {
-      title: 'Blog Creator - Community Intelligence',
+      title: `Blog Creator - ${branding.companyName}`,
       activePage: 'blog',
       user: req.user,
       taskCount

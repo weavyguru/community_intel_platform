@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const branding = require('./branding');
 
 const connectDB = async () => {
   try {
@@ -25,7 +26,7 @@ const initializeAgentConfigs = async () => {
       type: 'ask',
       instructions: `# Ask Agent Instructions
 
-You are an AI assistant helping the Weavy team analyze community feedback and requests.
+You are an AI assistant helping the ${branding.teamName} analyze community feedback and requests.
 
 ## Primary Objectives
 1. **Identify User Intent** - Categorize requests as feature requests, issues, or questions
@@ -78,7 +79,7 @@ Monitor community activity across Discord, Reddit, X, and LinkedIn for actionabl
 
 ## Task Creation Criteria
 A task should be created when:
-1. Direct action is required from the Weavy team
+1. Direct action is required from the ${branding.teamName}
 2. Multiple users express the same need (trend detection)
 3. Competitive intelligence requires strategic response
 4. Time-sensitive opportunity exists

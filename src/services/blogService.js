@@ -1,10 +1,18 @@
 const claudeService = require('./claudeService');
 const chromaService = require('./chromaService');
 const { selectIconsForTopic } = require('../lib/blogImageCreator/iconSelector');
-const { generateVariations } = require('../lib/blogImageCreator/generator');
 const { getClaudeClient } = require('../config/claude');
 const BlogInstructions = require('../models/BlogInstructions');
 const Persona = require('../models/Persona');
+
+// Image generator factory - select based on BLOG_IMAGE_GENERATOR env var
+const getImageGenerator = () => {
+    const generatorType = process.env.BLOG_IMAGE_GENERATOR || 'weavy';
+    if (generatorType === 'custom') {
+        return require('../lib/blogImageCreator/generatorCustom');
+    }
+    return require('../lib/blogImageCreator/generator');
+};
 
 /**
  * Retry wrapper for Claude API calls that handles overloaded errors (529)
@@ -468,7 +476,8 @@ async function generateBlogPost(topic, synopsis, relevanceReason, searchResults,
 
         logStep('cover_image', 'generating', 'Generating 5 cover image variations...');
 
-        const coverImages = await generateVariations(topic, 5, iconSelection.iconPaths);
+        const imageGenerator = getImageGenerator();
+        const coverImages = await imageGenerator.generateVariations(topic, 5, iconSelection.iconPaths);
 
         logStep('cover_image', 'complete', `Generated ${coverImages.length} cover images`, {
             images: coverImages

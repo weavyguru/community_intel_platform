@@ -1,5 +1,6 @@
 const { sgMail, getFromEmail } = require('../config/sendgrid');
 const crypto = require('crypto');
+const branding = require('../config/branding');
 
 class EmailService {
   async sendVerificationEmail(user, verificationToken) {
@@ -9,10 +10,10 @@ class EmailService {
       const msg = {
         to: user.email,
         from: getFromEmail(),
-        subject: 'Verify Your Email - Community Intelligence Platform',
+        subject: `Verify Your Email - ${branding.companyName}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Welcome to the Community Intelligence Platform!</h2>
+            <h2>Welcome to ${branding.companyName}!</h2>
             <p>Hi ${user.name},</p>
             <p>Thank you for registering. Please verify your email address by clicking the button below:</p>
             <div style="text-align: center; margin: 30px 0;">
@@ -25,7 +26,7 @@ class EmailService {
             <p>This link will expire in 24 hours.</p>
             <p>If you didn't create this account, please ignore this email.</p>
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName}</p>
           </div>
         `
       };
@@ -45,7 +46,7 @@ class EmailService {
       const msg = {
         to: user.email,
         from: getFromEmail(),
-        subject: 'Reset Your Password - Community Intelligence Platform',
+        subject: `Reset Your Password - ${branding.companyName}`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Password Reset Request</h2>
@@ -61,7 +62,7 @@ class EmailService {
             <p>This link will expire in 1 hour.</p>
             <p>If you didn't request a password reset, please ignore this email.</p>
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName}</p>
           </div>
         `
       };
@@ -108,7 +109,7 @@ class EmailService {
             </div>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName}</p>
           </div>
         `
       }));
@@ -212,7 +213,7 @@ class EmailService {
               <h3 style="margin: 0 0 15px 0; color: #374151;">What to do:</h3>
               <ol style="color: #4B5563; margin: 0; padding-left: 20px;">
                 <li style="margin-bottom: 8px;">Copy the post content above</li>
-                <li style="margin-bottom: 8px;">Go to <strong>${platformName}</strong> and create a new post</li>
+                <li style="margin-bottom: 8px;">Go to ${task.sourceUrl && task.sourceUrl !== '#' ? `<a href="${task.sourceUrl}" style="color: #4F46E5; font-weight: bold;">${platformName}</a>` : `<strong>${platformName}</strong>`} and create a new post</li>
                 <li style="margin-bottom: 8px;">Paste the content${imageUrl ? ' and add the image' : ''}</li>
                 <li style="margin-bottom: 8px;">Click "Done it!" when published</li>
               </ol>
@@ -234,7 +235,7 @@ class EmailService {
             </p>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName}</p>
           </div>
         `;
       } else {
@@ -294,7 +295,7 @@ class EmailService {
             </p>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName}</p>
           </div>
         `;
       }
@@ -401,7 +402,7 @@ class EmailService {
             </div>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Report</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName} - Automated Report</p>
           </div>
         `
       }));
@@ -466,7 +467,7 @@ class EmailService {
             </div>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Alert</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName} - Automated Alert</p>
           </div>
         `
       }));
@@ -533,7 +534,7 @@ class EmailService {
             </div>
 
             <hr style="margin: 30px 0; border: none; border-top: 1px solid #E5E7EB;">
-            <p style="color: #6B7280; font-size: 12px;">Weavy Community Intelligence Platform - Automated Report</p>
+            <p style="color: #6B7280; font-size: 12px;">${branding.companyName} - Automated Report</p>
           </div>
         `
       }));

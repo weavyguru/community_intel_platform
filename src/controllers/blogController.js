@@ -1,5 +1,6 @@
 const blogService = require('../services/blogService');
 const hubspotService = require('../services/hubspotService');
+const blogPublishService = require('../services/blogPublishService');
 const BlogTopic = require('../models/BlogTopic');
 const BlogPost = require('../models/BlogPost');
 const SocialPost = require('../models/SocialPost');
@@ -338,16 +339,18 @@ exports.deleteBlogPost = async (req, res) => {
 };
 
 /**
- * Publish a blog post to HubSpot (in draft mode)
+ * Publish a blog post (routes to configured publisher)
  */
 exports.publishToHubSpot = async (req, res) => {
     try {
         const { id } = req.params;
+        const publisherType = blogPublishService.getPublisherType();
 
-        if (!hubspotService.isConfigured()) {
-            return res.status(400).json({
-                error: 'HubSpot is not configured. Please set HUBSPOT_API_KEY and HUBSPOT_BLOG_ID environment variables.'
-            });
+        if (!blogPublishService.isConfigured()) {
+            const errorMsg = publisherType === 'hubspot'
+                ? 'HubSpot is not configured. Please set HUBSPOT_API_KEY and HUBSPOT_BLOG_ID environment variables.'
+                : 'Blog publisher is not configured. Please set BLOG_API_ENDPOINT and BLOG_API_KEY environment variables.';
+            return res.status(400).json({ error: errorMsg });
         }
 
         const blogPost = await BlogPost.findById(id);
@@ -358,39 +361,38 @@ exports.publishToHubSpot = async (req, res) => {
         // Get the selected cover image local path
         let coverImagePath = null;
         if (blogPost.selectedCoverImage && blogPost.selectedCoverImage.filename) {
-            // Convert the public URL to local file path
             const path = require('path');
             coverImagePath = path.join(__dirname, '../../public/uploads/blog-images', blogPost.selectedCoverImage.filename);
         }
 
-        // Publish to HubSpot
-        const hubspotResult = await hubspotService.publishBlogPost({
+        // Publish using the configured publisher
+        const publishResult = await blogPublishService.publishPost({
             title: blogPost.title,
-            subtitle: blogPost.subtitle,
-            body: blogPost.body,
-            metaDescription: blogPost.metaDescription,
+            content: blogPost.body,
             slug: blogPost.slug,
+            metaDescription: blogPost.metaDescription,
             coverImagePath: coverImagePath
         });
 
-        // Update blog post with HubSpot info
-        blogPost.publishedToHubSpot = true;
-        blogPost.hubSpotPostId = hubspotResult.id;
-        blogPost.hubSpotUrl = hubspotResult.url;
+        // Update blog post with publish info
+        blogPost.publishedToHubSpot = true; // Keep for backwards compat
+        blogPost.hubSpotPostId = publishResult.postId;
+        blogPost.hubSpotUrl = publishResult.editorUrl;
         blogPost.publishedAt = new Date();
         blogPost.status = 'published';
         await blogPost.save();
 
         return res.json({
             success: true,
-            hubspot: hubspotResult,
+            publisherType: publishResult.publisherType,
+            result: publishResult,
             post: blogPost
         });
 
     } catch (error) {
         console.error('Error in publishToHubSpot:', error);
         return res.status(500).json({
-            error: 'Failed to publish to HubSpot',
+            error: 'Failed to publish blog post',
             message: error.message
         });
     }

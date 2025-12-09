@@ -1,4 +1,5 @@
 const { getClaudeClient, getClaudeModel } = require('../config/claude');
+const branding = require('../config/branding');
 
 /**
  * Sanitize a string to remove invalid Unicode surrogate pairs
@@ -180,7 +181,7 @@ Provide:
       // Sanitize content to prevent JSON encoding errors from invalid Unicode
       const sanitizedContent = sanitizeUnicode(content || '');
 
-      const userMessage = `Analyze this community content and determine if it requires action from the Weavy team:
+      const userMessage = `Analyze this community content and determine if it requires action from the ${branding.teamName}:
 
 Content: ${sanitizedContent}
 Platform: ${metadata.platform || 'Unknown'}
