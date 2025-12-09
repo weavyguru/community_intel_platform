@@ -4,6 +4,13 @@
  */
 
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const FormData = require('form-data');
+
+// Gainable Blog API configuration
+const GAINABLE_API_ENDPOINT = 'https://www.gainable.dev';
+const GAINABLE_API_KEY = 'gbl_sk_7f3d9a2b1c8e4f6d5a0b3c2e1f9d8a7b6c5e4f3d2a1b0c9e8f7d6a5b4c3d2e1f';
 
 // Get the configured publisher type
 const getPublisherType = () => {
@@ -23,7 +30,8 @@ const isConfigured = () => {
     }
 
     if (publisherType === 'custom') {
-        return !!(process.env.BLOG_API_ENDPOINT && process.env.BLOG_API_KEY);
+        // Gainable API is hardcoded, always configured
+        return true;
     }
 
     return false;
@@ -88,37 +96,88 @@ const publishToHubSpot = async (post) => {
 };
 
 /**
- * Publish to custom API
- * Sends POST request to BLOG_API_ENDPOINT with Bearer token auth
+ * Upload image to Gainable API
+ * POST /api/upload-image with multipart/form-data
  */
-const publishToCustomApi = async (post) => {
-    const endpoint = process.env.BLOG_API_ENDPOINT;
-    const apiKey = process.env.BLOG_API_KEY;
+const uploadImageToCustomApi = async (imagePath) => {
+    const baseUrl = GAINABLE_API_ENDPOINT;
+    const apiKey = GAINABLE_API_KEY;
 
-    if (!endpoint || !apiKey) {
-        throw new Error('Custom blog API not configured. Set BLOG_API_ENDPOINT and BLOG_API_KEY.');
-    }
+    // Read the image file
+    const imageBuffer = fs.readFileSync(imagePath);
+    const filename = path.basename(imagePath);
+
+    // Create form data
+    const formData = new FormData();
+    formData.append('image', imageBuffer, {
+        filename: filename,
+        contentType: 'image/png'
+    });
 
     try {
-        const response = await axios.post(endpoint, {
+        const response = await axios.post(`${baseUrl}/api/upload-image`, formData, {
+            headers: {
+                'X-API-Key': apiKey,
+                ...formData.getHeaders()
+            }
+        });
+
+        if (response.data.success) {
+            console.log('[Custom API] Image uploaded:', response.data.url);
+            return response.data.url;
+        } else {
+            throw new Error('Image upload failed: ' + JSON.stringify(response.data));
+        }
+    } catch (error) {
+        console.error('Custom API image upload error:', error.message);
+        if (error.response?.data) {
+            console.error('API response:', error.response.data);
+        }
+        throw new Error(`Custom API image upload failed: ${error.message}`);
+    }
+};
+
+/**
+ * Publish to Gainable API
+ * 1. Upload image via /api/upload-image
+ * 2. Publish post via /api/publish-post
+ */
+const publishToCustomApi = async (post) => {
+    const baseUrl = GAINABLE_API_ENDPOINT;
+    const apiKey = GAINABLE_API_KEY;
+
+    try {
+        // Step 1: Upload cover image if provided
+        let imageUrl = null;
+        if (post.coverImagePath && fs.existsSync(post.coverImagePath)) {
+            imageUrl = await uploadImageToCustomApi(post.coverImagePath);
+        }
+
+        // Step 2: Publish the blog post
+        const response = await axios.post(`${baseUrl}/api/publish-post`, {
             title: post.title,
-            content: post.content,
-            slug: post.slug,
-            metaDescription: post.metaDescription,
-            coverImagePath: post.coverImagePath
+            subtitle: post.metaDescription || '',
+            image: imageUrl,
+            author: post.author || 'Gainable Team',
+            body: post.content
         }, {
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'X-API-Key': apiKey,
                 'Content-Type': 'application/json'
             }
         });
 
-        return {
-            postId: response.data.id || response.data.postId,
-            editorUrl: response.data.editorUrl || response.data.url || null,
-            publisherType: 'custom',
-            response: response.data
-        };
+        if (response.data.success) {
+            console.log('[Custom API] Post published:', response.data.url);
+            return {
+                postId: response.data.slug,
+                editorUrl: `${baseUrl}${response.data.url}`,
+                publisherType: 'custom',
+                response: response.data
+            };
+        } else {
+            throw new Error('Publish failed: ' + JSON.stringify(response.data));
+        }
     } catch (error) {
         console.error('Custom API publish error:', error.message);
         if (error.response?.data) {
