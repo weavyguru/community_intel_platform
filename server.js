@@ -213,11 +213,11 @@ app.get('/blog', auth, async (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.render('login', { layout: false });
+  res.render('login', { layout: false, branding });
 });
 
 app.get('/register', (req, res) => {
-  res.render('register', { layout: false });
+  res.render('register', { layout: false, branding });
 });
 
 // Admin routes

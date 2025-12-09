@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const branding = require('../config/branding');
 
 const userSchema = new mongoose.Schema({
   email: {
@@ -8,8 +9,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     validate: {
-      validator: (email) => email.endsWith('@weavy.com'),
-      message: 'Only @weavy.com email addresses are allowed'
+      validator: (email) => {
+        // If no domain restriction is configured, allow all emails
+        if (!branding.allowedEmailDomain) return true;
+        return email.endsWith('@' + branding.allowedEmailDomain);
+      },
+      message: () => `Only @${branding.allowedEmailDomain || 'configured domain'} email addresses are allowed`
     }
   },
   password: { type: String, required: true },

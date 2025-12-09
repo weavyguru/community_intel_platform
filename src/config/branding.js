@@ -14,5 +14,9 @@ module.exports = {
     fromEmail: process.env.FROM_EMAIL || 'noreply@weavy.com',
 
     // Platform name for page titles
-    platformName: process.env.COMPANY_NAME || 'Community Intelligence Platform'
+    platformName: process.env.COMPANY_NAME || 'Community Intelligence Platform',
+
+    // Allowed email domain for registration (e.g., "weavy.com")
+    // If not set, all email domains are allowed
+    allowedEmailDomain: process.env.ALLOWED_EMAIL_DOMAIN || 'weavy.com'
 };

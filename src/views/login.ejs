@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Community Intelligence Platform</title>
+  <title>Login - <%= branding.companyName %></title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.css" />
@@ -14,7 +14,7 @@
     <div class="max-w-md w-full space-y-8">
       <div>
         <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Weavy Community Intelligence
+          <%= branding.companyName %>
         </h2>
         <p class="mt-2 text-center text-sm text-gray-600">
           Sign in to your account
@@ -27,7 +27,7 @@
             <sl-input
               id="email"
               type="email"
-              placeholder="Email (@weavy.com)"
+              placeholder="Email<%= branding.allowedEmailDomain ? ' (@' + branding.allowedEmailDomain + ')' : '' %>"
               required
             ></sl-input>
           </div>

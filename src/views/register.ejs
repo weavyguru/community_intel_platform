@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register - Community Intelligence Platform</title>
+  <title>Register - <%= branding.companyName %></title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/components/icon/icon.css" />
@@ -16,9 +16,11 @@
         <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Create your account
         </h2>
+        <% if (branding.allowedEmailDomain) { %>
         <p class="mt-2 text-center text-sm text-gray-600">
-          Only @weavy.com email addresses are allowed
+          Only @<%= branding.allowedEmailDomain %> email addresses are allowed
         </p>
+        <% } %>
       </div>
 
       <div class="bg-white rounded-lg shadow p-8">
@@ -35,9 +37,11 @@
             <sl-input
               id="email"
               type="email"
-              placeholder="Email (@weavy.com)"
+              placeholder="Email<%= branding.allowedEmailDomain ? ' (@' + branding.allowedEmailDomain + ')' : '' %>"
               required
-              help-text="Must be a @weavy.com email address"
+              <% if (branding.allowedEmailDomain) { %>
+              help-text="Must be a @<%= branding.allowedEmailDomain %> email address"
+              <% } %>
             ></sl-input>
           </div>
 
@@ -95,6 +99,9 @@
   </sl-dialog>
 
   <script>
+    // Branding config passed from server
+    const allowedEmailDomain = '<%= branding.allowedEmailDomain || "" %>';
+
     // Global toast notification helper using Shoelace native
     function showToast(message, variant = 'primary', icon = 'info-circle', duration = 3000) {
       const alert = Object.assign(document.createElement('sl-alert'), {
@@ -121,8 +128,8 @@
       const password = document.getElementById('password').value;
       const confirmPassword = document.getElementById('confirmPassword').value;
 
-      if (!email.endsWith('@weavy.com')) {
-        showToast('Only @weavy.com email addresses are allowed', 'warning', 'exclamation-triangle');
+      if (allowedEmailDomain && !email.endsWith('@' + allowedEmailDomain)) {
+        showToast(`Only @${allowedEmailDomain} email addresses are allowed`, 'warning', 'exclamation-triangle');
         return;
       }
 

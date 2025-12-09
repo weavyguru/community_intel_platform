@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
 const crypto = require('crypto');
+const branding = require('../config/branding');
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -28,9 +29,9 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Check email domain
-    if (!email.toLowerCase().endsWith('@weavy.com')) {
-      return res.status(400).json({ error: 'Only @weavy.com email addresses are allowed' });
+    // Check email domain if restriction is configured
+    if (branding.allowedEmailDomain && !email.toLowerCase().endsWith('@' + branding.allowedEmailDomain)) {
+      return res.status(400).json({ error: `Only @${branding.allowedEmailDomain} email addresses are allowed` });
     }
 
     // Generate verification token
