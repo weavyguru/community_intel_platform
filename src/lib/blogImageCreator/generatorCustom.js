@@ -16,6 +16,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const sharp = require('sharp');
 const { Resvg } = require('@resvg/resvg-js');
+const { selectIconsForTopic } = require('./iconSelector');
 
 // Configuration
 const BG_WIDTH = 1024;
@@ -168,11 +169,11 @@ async function generateImage(bgPath, outputPath, selectedIconPaths) {
 
 /**
  * Generate blog cover images with custom template
- * Signature matches original generator: (topic, count, selectedIconPaths)
+ * Each variation gets fresh AI-selected icons for variety
  *
  * @param {string} topic - The blog topic
  * @param {number} count - Number of variations to generate (default 5)
- * @param {Array} selectedIconPaths - Array of 3 icon paths
+ * @param {Array} selectedIconPaths - Initial icon paths (used for first variation, then fresh AI selection for rest)
  * @returns {Promise<Array>} Array of generated image info
  */
 async function generateVariations(topic, count = 5, selectedIconPaths = null) {
@@ -182,10 +183,6 @@ async function generateVariations(topic, count = 5, selectedIconPaths = null) {
 
     if (backgrounds.length === 0) {
         throw new Error('No backgrounds found in assets-custom/backgrounds/. Please add background images.');
-    }
-
-    if (!selectedIconPaths || selectedIconPaths.length < 3) {
-        throw new Error('Must provide exactly 3 icon paths');
     }
 
     // Output directory matches original generator
@@ -199,10 +196,24 @@ async function generateVariations(topic, count = 5, selectedIconPaths = null) {
         // Randomly select a background for each variation
         const bgPath = backgrounds[Math.floor(Math.random() * backgrounds.length)];
 
+        // Get AI-selected icons for each variation
+        let variationIcons;
+        if (i === 0 && selectedIconPaths && selectedIconPaths.length >= 3) {
+            // Use pre-selected icons for first variation
+            variationIcons = selectedIconPaths;
+            console.log(`[Custom Generator] Variation ${i}: Using pre-selected icons`);
+        } else {
+            // Get fresh AI selection for remaining variations
+            console.log(`[Custom Generator] Variation ${i}: Requesting AI icon selection...`);
+            const iconSelection = await selectIconsForTopic(topic, null);
+            variationIcons = iconSelection.iconPaths;
+            console.log(`[Custom Generator] Variation ${i}: AI selected: ${iconSelection.iconNames.join(', ')}`);
+        }
+
         const filename = `blog-${timestamp}-${i}.png`;
         const outputPath = path.join(outputDir, filename);
 
-        await generateImage(bgPath, outputPath, selectedIconPaths);
+        await generateImage(bgPath, outputPath, variationIcons);
 
         results.push({
             filename,
